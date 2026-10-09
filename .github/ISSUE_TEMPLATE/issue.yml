@@ -1,0 +1,9 @@
+name: Untyped Issue
+description: Define an untyped leaf under a User Story or Bug Story.
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

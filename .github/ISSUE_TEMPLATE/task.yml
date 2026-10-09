@@ -1,0 +1,10 @@
+name: Task
+description: Define a leaf task under a User Story or Bug Story.
+type: Task
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

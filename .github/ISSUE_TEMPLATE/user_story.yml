@@ -1,0 +1,24 @@
+name: User Story
+description: Define a user story; its allowed parent type is Feature.
+type: User Story
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Provide measurable criteria; placeholders are not accepted.
+    validations:
+      required: true
+  - type: textarea
+    id: delivery_evidence
+    attributes:
+      label: Delivery Evidence
+      description: Provide evidence or an actionable evidence collection plan.
+    validations:
+      required: true
