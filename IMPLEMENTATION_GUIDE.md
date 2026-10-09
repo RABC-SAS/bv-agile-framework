@@ -53,6 +53,8 @@ node scripts/setup-agile.mjs --phase verify
 node scripts/setup-agile.mjs --phase negative
 node scripts/setup-agile.mjs --phase negative --apply --approve negative --confirm-project "$PROJECT"
 # Wait for the issue-triggered Actions to finish; rerun if comments are pending.
+# To reconcile link-only changes immediately, run the "Validate issue" workflow
+# manually in Actions; otherwise the hourly scheduled reconciliation covers them.
 node scripts/setup-agile.mjs --phase verify-negative
 
 node scripts/setup-agile.mjs --phase cleanup
@@ -89,21 +91,25 @@ Review each phase separately, not a blind loop.
   location, pass the same `--state /absolute/path/state.json` on every invocation.
   Run only one CLI process per state file at a time.
 - Cleanup closes, never deletes, owned positive and negative issues. It removes
-  only project items recorded as created by this run, preserving adopted items,
+  only project items recorded as created by this run (including archived items), preserving adopted items,
   links, the project, fields, view and label. It checks closure/item removal via
   API. Export verification before cleanup; positive membership verification is
   intentionally expected to fail after owned project items are removed.
   Use a new state file for a new run after cleanup.
 - The Action has only `contents: read` and `issues: write`. It reads fresh issue,
-  parent and sub-issue data on all issue events, including creation/edit and
-  hierarchy/type changes. It reports but never edits issue bodies, fields, types,
+  parent and sub-issue data on creation/edit/reopen/type events and hourly/manual
+  reconciliation. Pure hierarchy changes use a separate GitHub webhook, not a
+  native Actions trigger, so they are covered by reconciliation rather than
+  guaranteed immediate issue events. It reports but never edits issue bodies, fields, types,
   or links. API failures fail the job rather than silently declaring success.
   Comments use `<!-- bv-agile-framework-validation:v1 -->` and are updated only
   when authored by `github-actions[bot]`; user marker spoofing is ignored.
-  Concurrent runs are serialized per issue so unrelated events are not dropped
-  and marker creation cannot race. Each run reports only on its triggering issue,
-  checking both its parent edge and all child edges. Existing neighbor comments
-  are refreshed on that neighbor's next issue event, not rewritten across jobs.
+  Concurrent runs are serialized repository-wide with `queue: max` (up to 100
+  pending runs) so marker creation cannot race across event/reconciliation jobs.
+  Event runs report on the triggering issue; reconciliation checks all repository
+  issues and refreshes neighbor reports, including closed fixtures. It also
+  covers queue overflow and link-only changes. Scheduled runs may be delayed by
+  GitHub; use the manual trigger when immediate verification is needed.
 
 ## Field storage decision
 

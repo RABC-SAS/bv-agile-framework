@@ -2,13 +2,18 @@ name: Validate issue
 
 'on':
   issues:
+    types: [opened, edited, reopened, typed, untyped]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
   issues: write
 
 concurrency:
-  group: issue-validation-${{ github.repository }}-${{ github.event.issue.number }}
+  group: issue-validation-${{ github.repository }}
+  queue: max
   cancel-in-progress: false
 
 jobs:

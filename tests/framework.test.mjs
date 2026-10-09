@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { GitHub, loadConfig, getParent, root } from '../scripts/github.mjs';
-import { hasContent, sections, validate, validateLive, report, marker } from '../scripts/validate-issue.mjs';
+import { hasContent, sections, validate, validateLive, report, marker, reconcile } from '../scripts/validate-issue.mjs';
 import { Setup } from '../scripts/setup-agile.mjs';
 
 const config = loadConfig();
@@ -184,7 +184,50 @@ test('forms enforce exactly configured fields, and workflow has minimal permissi
   { encoding: 'utf8' }));
   assert.deepEqual(workflow.permissions, { contents: 'read', issues: 'write' });
   assert.ok(Object.hasOwn(workflow.on, 'issues'));
+  assert.ok(Object.hasOwn(workflow.on, 'schedule'));
+  assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'));
+  assert.equal(workflow.concurrency.queue, 'max');
   assert.ok(!readFileSync(`${root}scripts/validate-issue.mjs`, 'utf8').includes("request('DELETE'"));
+});
+
+test('reconciliation covers link-only changes, skips PRs and preserves reports on API failure', () => {
+  const writes = [];
+  const task = issue('Task', 2);
+  const parent = issue('Initiative', 1);
+  const api = {
+    list(endpoint) {
+      if (endpoint.includes('?state=all')) return [task, { number: 3, pull_request: {} }];
+      return [];
+    },
+    request(method, endpoint, payload) {
+      if (method === 'POST') { writes.push(payload); return; }
+      return endpoint.endsWith('/parent') ? parent : task;
+    },
+  };
+  reconcile(api, config, {}, 'schedule', config.smoke_test.repository);
+  assert.equal(writes.length, 1);
+  assert.match(writes[0].body, /Initiative → Task/);
+  writes.length = 0;
+  reconcile(api, config, {}, 'workflow_dispatch', config.smoke_test.repository);
+  assert.equal(writes.length, 1);
+  api.request = () => { throw Object.assign(new Error('Forbidden'), { status: 403 }); };
+  assert.throws(() => reconcile(api, config, { issue: task }, 'issues', config.smoke_test.repository), /Forbidden/);
+  api.request = () => { throw Object.assign(new Error('Deleted'), { status: 410 }); };
+  assert.doesNotThrow(() => reconcile(api, config, { issue: task }, 'issues', config.smoke_test.repository));
+});
+
+test('project discovery includes archived items and all pages', () => {
+  let page = 0;
+  const setup = new Setup({ graphql(query, variables) {
+    assert.match(query, /archivedStates:\[ARCHIVED, NOT_ARCHIVED\]/);
+    assert.equal(variables.cursor, page === 0 ? null : 'cursor');
+    page++;
+    return { node: { items: {
+      nodes: [{ id: `PVTI_${page}` }],
+      pageInfo: { hasNextPage: page === 1, endCursor: 'cursor' },
+    } } };
+  } }, config, state(), false);
+  assert.deepEqual(setup.projectItems({ id: 'P_2' }), [{ id: 'PVTI_1' }, { id: 'PVTI_2' }]);
 });
 
 test('smoke creation, rerun, API verification, live negative reports and cleanup lifecycle', () => {

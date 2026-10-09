@@ -91,18 +91,39 @@ export function validateLive(api, config, issue) {
   return { parent, children, violations: validate(config, issue, parent, children) };
 }
 
+export function reconcile(api, config, event, eventName, repository) {
+  let targets;
+  if (event.issue && !event.issue.pull_request) {
+    targets = [event.issue];
+  } else if (['schedule', 'workflow_dispatch'].includes(eventName)) {
+    targets = api.list(`repos/${repository}/issues?state=all`).filter(issue => !issue.pull_request);
+  } else {
+    return;
+  }
+  for (const target of targets) {
+    // Issues may have been deleted or transferred since enumeration/event delivery.
+    let issue;
+    try {
+      issue = api.request('GET', `repos/${repository}/issues/${target.number}`);
+    } catch (error) {
+      if ([404, 410].includes(error.status)) continue;
+      throw error;
+    }
+    if (issue.repository_url !== `https://api.github.com/repos/${repository}`) continue;
+    const result = validateLive(api, config, issue);
+    report(api, issue, result.violations);
+    console.log(`#${issue.number}: ${result.violations.length} violation(s)`);
+  }
+}
+
 export function main() {
   const config = loadConfig();
   if (config.field_storage.decision !== config.field_storage.fallback) {
     throw new Error('This validator requires the configured issue-form fallback storage.');
   }
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  if (!event.issue || event.issue.pull_request) return;
   const api = new GitHub();
-  const issue = api.request('GET', `repos/${process.env.GITHUB_REPOSITORY}/issues/${event.issue.number}`);
-  const result = validateLive(api, config, issue);
-  report(api, issue, result.violations);
-  console.log(`#${issue.number}: ${result.violations.length} violation(s)`);
+  reconcile(api, config, event, process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REPOSITORY);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -277,7 +277,7 @@ export class Setup {
     do {
       const data = this.api.graphql(`query($id:ID!, $cursor:String) {
         node(id:$id) { ... on ProjectV2 {
-          items(first:100, after:$cursor) {
+          items(first:100, after:$cursor, archivedStates:[ARCHIVED, NOT_ARCHIVED]) {
             nodes { id content { ... on Issue { id } } }
             pageInfo { hasNextPage endCursor }
           }
