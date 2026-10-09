@@ -1,5 +1,5 @@
 schema_version: 1
-organization: Bigview-SAS
+organization: RABC-SAS
 repository: bv-agile-framework
 
 execution:
@@ -53,7 +53,7 @@ fields:
     required: false
 
 field_storage:
-  decision: pending_phase_0
+  decision: issue_form_sections_and_validation_action
   native_pass_criteria:
     - api_preserves_newlines
     - ui_can_edit_multiple_lines
@@ -73,11 +73,11 @@ validation:
   never_reparent_or_delete_automatically: true
 
 smoke_test:
-  project_owner: Bigview-SAS
+  project_owner: RABC-SAS
   project_number_candidate: 2
   project_title: Bigview Project Template Test
   require_live_identity_confirmation: true
-  repository: Bigview-SAS/bv-agile-framework
+  repository: RABC-SAS/bv-agile-framework
   marker: bv-agile-framework-smoke
   fixtures:
     - key: initiative
@@ -92,19 +92,30 @@ smoke_test:
     - key: user_story
       type: User Story
       parent: feature
-    - key: bug_story
-      type: Bug Story
-      parent: feature
     - key: story_task
       type: Task
       parent: user_story
     - key: story_issue
       type: null
       parent: user_story
+    - key: bug_story
+      type: Bug Story
+      parent: feature
     - key: bug_task
       type: Task
       parent: bug_story
     - key: bug_issue
       type: null
       parent: bug_story
+  negative_fixtures:
+    - key: negative_missing_fields
+      type: Initiative
+      parent: null
+      omit_required_fields: true
+    - key: negative_invalid_task
+      type: Task
+      parent: negative_missing_fields
+    - key: negative_invalid_issue
+      type: null
+      parent: negative_invalid_task
   cleanup: close_owned_fixtures_and_remove_owned_project_items

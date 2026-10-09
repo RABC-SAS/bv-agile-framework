@@ -1,0 +1,30 @@
+name: Epic
+description: Define an epic; its allowed parent type is Initiative.
+type: Epic
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Provide measurable criteria; placeholders are not accepted.
+    validations:
+      required: true
+  - type: textarea
+    id: delivery_evidence
+    attributes:
+      label: Delivery Evidence
+      description: Provide evidence or an actionable evidence collection plan.
+    validations:
+      required: true
+  - type: input
+    id: cost_centre
+    attributes:
+      label: Cost Centre
+    validations:
+      required: false

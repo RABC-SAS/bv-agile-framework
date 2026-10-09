@@ -1,5 +1,13 @@
 # Phase 0 — Verify APIs, Permissions, Project, and Text Capabilities
 
+> **Superseded execution instructions:** Use the implemented CLI in
+> [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md), targeting `RABC-SAS`.
+> The historical examples below are not executable setup instructions: some use
+> the old organization name, unsupported field-detail/visibility endpoints,
+> string-encoded JSON values, and an unsupported child `/parent` write.
+> Do not run them. The three native text capability criteria remain useful;
+> until verified, the implementation deliberately uses Markdown form sections.
+
 **Admin participation required.** This phase confirms that GitHub APIs, permissions, and capabilities support the planned Bigview-SAS configuration before bulk setup begins.
 
 ---

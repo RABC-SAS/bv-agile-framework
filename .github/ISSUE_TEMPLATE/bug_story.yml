@@ -1,0 +1,11 @@
+name: Bug Story
+description: Define a bug story; its allowed parent type is Feature.
+type: Bug Story
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Include reproduction steps, expected behavior, and actual behavior.
+    validations:
+      required: true

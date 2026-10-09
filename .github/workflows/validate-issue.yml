@@ -1,0 +1,30 @@
+name: Validate issue
+
+'on':
+  issues:
+    types: [opened, edited, reopened, typed, untyped]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-validation-${{ github.repository }}
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Report field and hierarchy violations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/validate-issue.mjs
