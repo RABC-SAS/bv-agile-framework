@@ -1,13 +1,14 @@
-schema_version: 1
+schema_version: 2
 organization: RABC-SAS
 repository: bv-agile-framework
 
-execution:
-  approval_required_after_each_phase: false
-  scripts:
-    idempotent: true
-    dry_run_required: true
-  preserve_unmanaged_resources: true
+project:
+  owner: RABC-SAS
+  number: 2
+  title: Agile Project Config
+  status_field: Status
+  statuses: [Backlog, Ready, In progress, In review, Done]
+  empty_status: Backlog
 
 issue_types:
   - Initiative
@@ -34,50 +35,41 @@ hierarchy:
 fields:
   acceptance_criteria:
     name: Acceptance Criteria
+    storage: issue_body
+    heading: Acceptance Criteria
+    form_id: acceptance_criteria
+    applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
-    storage: capability_gated
-    native_type: text
-    fallback_form_id: acceptance_criteria
-    fallback_heading: Acceptance Criteria
+    required_from_status: Ready
   delivery_evidence:
     name: Delivery Evidence
+    storage: issue_body
+    heading: Delivery Evidence
+    form_id: delivery_evidence
+    applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
-    storage: capability_gated
-    native_type: text
-    fallback_form_id: delivery_evidence
-    fallback_heading: Delivery Evidence
+    required_from_status: In review
   cost_centre:
     name: Cost Centre
-    native_type: text
+    storage: organization_field
+    data_type: text
     applies_to: [Initiative, Epic, Feature]
-    required: false
+    required_on: []
 
-field_storage:
-  decision: pending_phase_0
-  native_pass_criteria:
-    - api_preserves_newlines
-    - ui_can_edit_multiple_lines
-    - ui_renders_markdown_checklists_and_links
-  fallback: issue_form_sections_and_validation_action
+forms:
   description_form_id: description
   description_heading: Description
+  description_required: true
 
 validation:
-  # Forms only validate form submissions; an Action must also cover bypasses.
-  required_content: non_whitespace_non_placeholder
-  required_at: creation_and_edit
+  mode: report_only
+  placeholders: [TBD, TODO, N/A, NA, None, 'Null', Placeholder, No response, Not provided, Not applicable, To be defined, To be determined, To be added]
   enforce_allowed_parent_child_types: true
-  untyped_issue_must_be_leaf: true
   terminal_types: [Task, null]
-  report_only: true
-  never_reparent_or_delete_automatically: true
+  check_field_applicability: true
+  marker: '<!-- bv-agile-framework-validation:v1 -->'
 
 smoke_test:
-  project_owner: RABC-SAS
-  project_number_candidate: 2
-  project_title: Agile Project Config
-  require_live_identity_confirmation: true
-  repository: RABC-SAS/bv-agile-framework
   marker: bv-agile-framework-smoke
   fixtures:
     - key: initiative

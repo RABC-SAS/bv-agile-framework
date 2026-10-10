@@ -1,4 +1,5 @@
-import { marker, validateIssue } from './policy.mjs';
+import { validateIssue } from './policy.mjs';
+import { projectStatuses } from './api.mjs';
 
 export async function parentOf(api, issue) {
   const data = await api.graphql('query($id:ID!){node(id:$id){... on Issue{id parent{id number repository{nameWithOwner}}}}}', { id: issue.node_id });
@@ -30,7 +31,7 @@ export async function snapshot(api, repository, number, orgFields) {
   return { issue, parent, ancestors, children, fieldValues, orgFields };
 }
 
-export async function reportResult(api, ledger, repository, number, errors, actor) {
+export async function reportResult(api, ledger, repository, number, errors, actor, marker) {
   const comments = await api.list(`repos/${repository}/issues/${number}/comments`);
   const matches = comments.filter(comment => comment.body?.includes(marker));
   if (matches.length > 1 || matches.some(comment => comment.user?.login !== actor || !comment.body.startsWith(marker))) {
@@ -50,12 +51,16 @@ export async function reportResult(api, ledger, repository, number, errors, acto
   return { changed: true, planned: false, id: comment.id, url: comment.html_url };
 }
 
-export async function reconcile(api, ledger, config, { numbers, actor, projectError } = {}) {
+export async function reconcile(api, ledger, config, { numbers, actor } = {}) {
   const repository = `${config.organization}/${config.repository}`;
   let orgFields;
   let fieldError;
-  try { orgFields = await api.list(`orgs/${config.organization}/issue-fields`); }
+  try { orgFields = Object.values(config.fields).some(field => field.storage === 'organization_field') ? await api.list(`orgs/${config.organization}/issue-fields`) : []; }
   catch (error) { fieldError = `Organization fields unreadable: ${error.message}; request a narrowly scoped GitHub App, not an admin PAT`; }
+  let statuses;
+  let projectError;
+  try { statuses = await projectStatuses(api, config); }
+  catch (error) { projectError = `Project status unreadable: ${error.message}; request narrowly scoped App project-read access`; }
   const issues = numbers ? numbers.map(number => ({ number })) : (await api.list(`repos/${repository}/issues?state=all`)).filter(issue => !issue.pull_request);
   const results = [];
   for (const reference of issues) {
@@ -63,12 +68,13 @@ export async function reconcile(api, ledger, config, { numbers, actor, projectEr
     let state;
     try {
       state = await snapshot(api, repository, reference.number, orgFields);
+      state.status = statuses ? statuses.items.get(state.issue.node_id)?.status ?? null : undefined;
       errors = validateIssue(config, state);
     } catch (error) { errors.push(`Unable to validate: ${error.message}`); }
     if (fieldError) errors.push(fieldError);
     if (projectError) errors.push(projectError);
     let report;
-    try { report = await reportResult(api, ledger, repository, reference.number, errors, actor); }
+    try { report = await reportResult(api, ledger, repository, reference.number, errors, actor, config.validation.marker); }
     catch (error) { errors.push(`Unable to report: ${error.message}`); }
     results.push({ number: reference.number, url: state?.issue.html_url, errors, report, snapshot: state });
   }
@@ -76,5 +82,5 @@ export async function reconcile(api, ledger, config, { numbers, actor, projectEr
     ledger.data.evidence.push({ action: 'reconciliation', run_url: process.env.GITHUB_RUN_ID ? `https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}` : null, results });
     ledger.save();
   }
-  return { results, violations: results.filter(result => result.errors.length).length, writes: api.writes };
+  return { results, violations: results.filter(result => result.errors.length).length, access_errors: [fieldError, projectError].filter(Boolean), writes: api.writes };
 }

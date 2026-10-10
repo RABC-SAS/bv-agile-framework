@@ -5,7 +5,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test",
-    "agile": "node scripts/agile.mjs"
+    "planning": "node scripts/planning.mjs"
   },
   "dependencies": {
     "markdown-it": "14.1.0",

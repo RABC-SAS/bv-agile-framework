@@ -24,7 +24,7 @@ export class GitHub {
     if (this.transport) return this.transport(path, { method, body });
     if (path.startsWith('https://api.github.com/')) path = path.slice('https://api.github.com/'.length);
     if (!/^[a-zA-Z_][\w/?=&%.:-]*$/.test(path)) throw new Error('Unsafe GitHub API path');
-    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+    const token = write ? process.env.GITHUB_TOKEN || process.env.GH_TOKEN : process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
     if (token) {
       const response = await fetch(`https://api.github.com/${path}`, {
         method,
@@ -126,19 +126,45 @@ export class Ledger {
 }
 
 export async function projectState(api, config) {
-  const identity = await api.graphql('query($owner:String!,$number:Int!){organization(login:$owner){login projectV2(number:$number){id number title url closed viewerCanUpdate}}}', { owner: config.smoke_test.project_owner, number: config.smoke_test.project_number_candidate });
+  const identity = await api.graphql('query($owner:String!,$number:Int!){organization(login:$owner){login projectV2(number:$number){id number title url closed viewerCanUpdate}}}', { owner: config.project.owner, number: config.project.number });
   const project = identity.organization?.projectV2;
-  if (!project || project.closed || identity.organization.login !== config.organization || project.title !== config.smoke_test.project_title || project.number !== config.smoke_test.project_number_candidate) {
+  if (!project || project.closed || identity.organization.login !== config.project.owner || project.title !== config.project.title || project.number !== config.project.number) {
     throw new Error('Existing project identity mismatch or inaccessible; never create a substitute');
   }
   const fields = [];
   let cursor = null;
   do {
-    const data = await api.graphql('query($id:ID!,$cursor:String){node(id:$id){... on ProjectV2{fields(first:100,after:$cursor){nodes{__typename ... on ProjectV2Field{id name dataType} ... on ProjectV2SingleSelectField{id name dataType} ... on ProjectV2IterationField{id name dataType}} pageInfo{hasNextPage endCursor}}}}}', { id: project.id, cursor });
+    const data = await api.graphql('query($id:ID!,$cursor:String){node(id:$id){... on ProjectV2{fields(first:100,after:$cursor){nodes{__typename ... on ProjectV2Field{id name dataType} ... on ProjectV2SingleSelectField{id name dataType options{id name}} ... on ProjectV2IterationField{id name dataType}} pageInfo{hasNextPage endCursor}}}}}', { id: project.id, cursor });
     const connection = data.node?.fields;
     if (!connection || connection.nodes.some(field => !field)) throw new Error('Project fields are unreadable or redacted');
     fields.push(...connection.nodes);
     cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
   } while (cursor);
   return { ...project, owner: identity.organization.login, fields };
+}
+
+export async function projectStatuses(api, config) {
+  const project = await projectState(api, config);
+  const fields = project.fields.filter(field => field.name === config.project.status_field);
+  if (fields.length !== 1 || fields[0].dataType !== 'SINGLE_SELECT') throw new Error('Expected one single-select project Status field');
+  for (const name of config.project.statuses) {
+    if (fields[0].options.filter(option => option.name === name).length !== 1) throw new Error(`Project Status option missing or ambiguous: ${name}`);
+  }
+  const items = new Map();
+  let cursor = null;
+  do {
+    const data = await api.graphql('query($id:ID!,$cursor:String,$field:String!){node(id:$id){... on ProjectV2{items(first:100,after:$cursor){nodes{id content{__typename ... on Issue{id number repository{nameWithOwner}} ... on PullRequest{id} ... on DraftIssue{id}} fieldValueByName(name:$field){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}} pageInfo{hasNextPage endCursor}}}}}', { id: project.id, cursor, field: config.project.status_field });
+    const connection = data.node?.items;
+    if (!connection) throw new Error('Project items are unreadable');
+    for (const item of connection.nodes) {
+      if (!item?.content) throw new Error('Project item content is redacted; access failure');
+      if (item.content.__typename !== 'Issue' || item.content.repository.nameWithOwner !== `${config.organization}/${config.repository}`) continue;
+      if (items.has(item.content.id)) throw new Error('Duplicate project items for the same issue');
+      const value = item.fieldValueByName;
+      if (value && (value.__typename !== 'ProjectV2ItemFieldSingleSelectValue' || value.field.id !== fields[0].id)) throw new Error('Project status value is unreadable or incompatible');
+      items.set(item.content.id, { id: item.id, number: item.content.number, status: value?.name ?? config.project.empty_status });
+    }
+    cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
+  } while (cursor);
+  return { project, field: fields[0], items };
 }

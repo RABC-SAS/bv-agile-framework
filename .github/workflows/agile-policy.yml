@@ -37,7 +37,8 @@ jobs:
         run: |
           args=()
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
-          node scripts/agile.mjs validate --event "$GITHUB_EVENT_PATH" --manifest "$RUNNER_TEMP/bv-agile-framework/validation.json" "${args[@]}"
+          node scripts/planning.mjs validate --manifest "$RUNNER_TEMP/bv-agile-framework/validation.json" "${args[@]}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.AGILE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run || false }}
