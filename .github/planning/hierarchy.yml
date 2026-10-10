@@ -1,9 +1,9 @@
 schema_version: 1
-organization: Bigview-SAS
+organization: RABC-SAS
 repository: bv-agile-framework
 
 execution:
-  approval_required_after_each_phase: true
+  approval_required_after_each_phase: false
   scripts:
     idempotent: true
     dry_run_required: true
@@ -73,11 +73,11 @@ validation:
   never_reparent_or_delete_automatically: true
 
 smoke_test:
-  project_owner: Bigview-SAS
+  project_owner: RABC-SAS
   project_number_candidate: 2
-  project_title: Bigview Project Template Test
+  project_title: Agile Project Config
   require_live_identity_confirmation: true
-  repository: Bigview-SAS/bv-agile-framework
+  repository: RABC-SAS/bv-agile-framework
   marker: bv-agile-framework-smoke
   fixtures:
     - key: initiative
