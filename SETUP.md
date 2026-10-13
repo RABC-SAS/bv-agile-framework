@@ -18,7 +18,6 @@ Target date and Effort are preserved. It never creates a replacement project or 
 Exact-name/type conflicts stop setup. Each write is recorded outside the repo and read back before proceeding.
 Organization writes require an organization owner with setup-only authority (OAuth `admin:org` or a suitable App).
 Project access requires `project` for sample item writes; read-only validation does not require project-write access.
-Do not put an organization-admin PAT in Actions secrets.
 
 In organization Settings > Planning > Issue fields, open Cost Centre and configure its pinned types as
 Initiative, Epic and Feature using the field's type applicability controls. Verify those controls in the live UI;
@@ -42,25 +41,8 @@ node scripts/planning.mjs validate --numbers 12,13 --manifest "$env:TEMP/bv-agil
 
 Validation updates one stable reporter-owned marker comment, exits nonzero on violations and does not change status.
 Use the same reporter account consistently; foreign or duplicate marker comments stop reporting rather than being overwritten.
-The small test suite is `npm test`; CI also checks that generated forms match the YAML.
 
-## Activate the Action
-
-Review and merge the setup PR. Issue creation, edits, type/field changes, hourly reconciliation and manual runs
-validate every repository issue. Project-status and hierarchy changes do not natively trigger this Action;
-the hourly reconciliation detects them, or run the workflow manually for an immediate check.
-For immediate automatic feedback, install an external GitHub App/webhook bridge subscribed to `projects_v2_item`
-and `sub_issues`; it dispatches `bv-agile-hierarchy-changed`. This bridge is not included or deployed here.
-
-CI has already shown that the repository `GITHUB_TOKEN` cannot read organization fields or the private project.
-Provide `AGILE_READ_TOKEN` as a narrowly scoped read credential with tested project, issue/hierarchy and
-organization-field access, preferably an App installation token refreshed by the App integration. Installation
-tokens expire; a one-off token pasted into a secret is not a durable solution. Never use admin credentials here.
-The read credential handles reads; `GITHUB_TOKEN` with `issues: write` handles comments.
-If the App token endpoints cannot read organization fields, resolve supported permissions before enabling validation.
-Use repository/organization Secrets settings directly; do not send tokens through chat or commit them.
-
-This is report-only control, not a GitHub UI transition lock. Rolling back statuses is deliberately not implemented.
+GitHub Projects cannot block a status change; this is report-only control, run on demand.
 
 ## Verify With Samples
 
@@ -76,7 +58,7 @@ stop on duplicates and record created IDs outside the repo before any later muta
 7. Rerun setup and validation to check no duplicate resources/comments; dry-run must make no writes.
 8. Remove only recorded owned project items and close only recorded owned fixtures. Preserve shared resources.
 
-Live sample testing requires the missing organization types and Cost Centre to exist. Local tests alone are not live evidence.
+Live sample testing requires the missing organization types and Cost Centre to exist.
 
 ## Extend the YAML
 
@@ -97,6 +79,6 @@ For native fields use `storage: organization_field` plus `data_type` (`text`, `n
 or `multi_select`). Select fields need `options` objects with name, color and priority. Setup stops rather than
 changing incompatible existing options. Use `required_on: []` for optional fields.
 Edit `hierarchy` to change allowed children; edit `validation.placeholders` to extend rejected content.
-Regenerate forms, run `npm test` and `check-forms`, then review the YAML change in a PR.
+Regenerate forms, run `check-forms`, then review the YAML change in a PR.
 For a removed/renamed type, explicitly review deletion of its generated form; unmanaged forms/resources are never removed automatically.
 New rule kinds beyond status gates, hierarchy and field applicability require validator code, not just a new YAML key.

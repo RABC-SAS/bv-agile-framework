@@ -32,7 +32,7 @@ try {
     }
     for (const [name, document] of documents) {
       const path = join(directory, name);
-      const current = existsSync(path) ? readFileSync(path, 'utf8') : null;
+      const current = existsSync(path) ? readFileSync(path, 'utf8').replace(/\r\n/g, '\n') : null;
       if (current === document) continue;
       drift.push(path);
       if (command === 'generate-forms' && !api.dryRun) {

@@ -4,7 +4,6 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node --test",
     "planning": "node scripts/planning.mjs"
   },
   "dependencies": {
