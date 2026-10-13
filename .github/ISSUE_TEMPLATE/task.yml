@@ -1,0 +1,11 @@
+# Generated from .github/planning/hierarchy.yml
+name: Task
+description: Create Task
+type: Task
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

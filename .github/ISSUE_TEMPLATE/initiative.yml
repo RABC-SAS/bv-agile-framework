@@ -1,0 +1,23 @@
+# Generated from .github/planning/hierarchy.yml
+name: Initiative
+description: Create Initiative
+type: Initiative
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+    validations:
+      required: false
+  - type: textarea
+    id: delivery_evidence
+    attributes:
+      label: Delivery Evidence
+    validations:
+      required: false

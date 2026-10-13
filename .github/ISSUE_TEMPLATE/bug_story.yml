@@ -1,0 +1,11 @@
+# Generated from .github/planning/hierarchy.yml
+name: Bug Story
+description: Create Bug Story
+type: Bug Story
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true

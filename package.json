@@ -1,0 +1,13 @@
+{
+  "name": "bv-agile-framework-validation",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "planning": "node scripts/planning.mjs"
+  },
+  "dependencies": {
+    "markdown-it": "14.1.0",
+    "yaml": "2.8.1"
+  }
+}
