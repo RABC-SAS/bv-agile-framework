@@ -4,7 +4,9 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
-    "planning": "node scripts/planning.mjs"
+    "planning": "node scripts/planning.mjs",
+    "pilot": "node scripts/pilot.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "markdown-it": "14.1.0",

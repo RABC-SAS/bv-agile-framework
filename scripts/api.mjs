@@ -24,10 +24,11 @@ export class GitHub {
     if (this.transport) return this.transport(path, { method, body });
     if (path.startsWith('https://api.github.com/')) path = path.slice('https://api.github.com/'.length);
     if (!/^[a-zA-Z_][\w/?=&%.:-]*$/.test(path)) throw new Error('Unsafe GitHub API path');
-    const token = write ? process.env.GITHUB_TOKEN || process.env.GH_TOKEN : process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
     if (token) {
       const response = await fetch(`https://api.github.com/${path}`, {
         method,
+        signal: AbortSignal.timeout(30000),
         headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -36,11 +37,11 @@ export class GitHub {
       if (!response.ok) throw new ApiError(response.status, result?.message ?? 'Request failed');
       return result;
     }
-    const executable = process.env.GH_BIN || (process.platform === 'win32' ? 'C:/Program Files/GitHub CLI/gh.exe' : 'gh');
+    const executable = process.env.GH_BIN || (process.platform === 'win32' ? 'C:\\Program Files\\GitHub CLI\\gh.exe' : 'gh');
     try {
       const args = ['api', path, '--method', method, '-H', 'Accept: application/vnd.github+json', '-H', 'X-GitHub-Api-Version: 2026-03-10'];
       if (body !== undefined) args.push('--input', '-');
-      const output = execFileSync(executable, args, { input: body === undefined ? undefined : JSON.stringify(body), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] });
+      const output = execFileSync(executable, args, { input: body === undefined ? undefined : JSON.stringify(body), encoding: 'utf8', timeout: 30000, maxBuffer: 32 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] });
       return output.trim() ? JSON.parse(output) : null;
     } catch (error) {
       const status = Number(String(error.stderr ?? '').match(/HTTP (\d{3})/)?.[1] ?? 0);
@@ -57,17 +58,18 @@ export class GitHub {
 
   async list(path) {
     const result = [];
-    for (let page = 1; ; page += 1) {
+    for (let page = 1; page <= 100; page += 1) {
       const rows = await this.request(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
       if (!Array.isArray(rows)) throw new Error(`Expected paginated array: ${path}`);
       result.push(...rows);
       if (rows.length < 100) return result;
     }
+    throw new Error(`Pagination page limit exceeded: ${path}`);
   }
 }
 
 export class Ledger {
-  constructor(path, { dryRun = false, repository } = {}) {
+  constructor(path, { dryRun = false, repository, allowPending = false } = {}) {
     if (!path) throw new Error('--manifest outside the repository is required');
     this.path = resolve(path);
     this.dryRun = dryRun;
@@ -78,7 +80,7 @@ export class Ledger {
     if (local === '' || (!local.startsWith('..') && !isAbsolute(local))) throw new Error('Manifest must be outside the repository');
     this.data = existsSync(this.path) ? JSON.parse(readFileSync(this.path, 'utf8')) : { schema: 1, repository, resources: [], operations: [], evidence: [] };
     if (this.data.schema !== 1 || this.data.repository !== repository) throw new Error('Manifest repository or schema mismatch');
-    if (this.data.operations.some(operation => operation.state === 'pending')) throw new Error('Manifest has an interrupted write; inspect before resuming');
+    if (!allowPending && this.data.operations.some(operation => operation.state === 'pending')) throw new Error('Manifest has an interrupted write; inspect before resuming');
   }
 
   save() {
@@ -133,12 +135,15 @@ export async function projectState(api, config) {
   }
   const fields = [];
   let cursor = null;
+  const seen = new Set();
   do {
     const data = await api.graphql('query($id:ID!,$cursor:String){node(id:$id){... on ProjectV2{fields(first:100,after:$cursor){nodes{__typename ... on ProjectV2Field{id name dataType} ... on ProjectV2SingleSelectField{id name dataType options{id name}} ... on ProjectV2IterationField{id name dataType}} pageInfo{hasNextPage endCursor}}}}}', { id: project.id, cursor });
     const connection = data.node?.fields;
     if (!connection || connection.nodes.some(field => !field)) throw new Error('Project fields are unreadable or redacted');
     fields.push(...connection.nodes);
     cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
+    if (connection.pageInfo.hasNextPage && (!cursor || seen.has(cursor) || seen.size >= 100)) throw new Error('Project field pagination did not advance or exceeded limit');
+    if (cursor) seen.add(cursor);
   } while (cursor);
   return { ...project, owner: identity.organization.login, fields };
 }
@@ -152,6 +157,7 @@ export async function projectStatuses(api, config) {
   }
   const items = new Map();
   let cursor = null;
+  const seen = new Set();
   do {
     const data = await api.graphql('query($id:ID!,$cursor:String,$field:String!){node(id:$id){... on ProjectV2{items(first:100,after:$cursor){nodes{id content{__typename ... on Issue{id number repository{nameWithOwner}} ... on PullRequest{id} ... on DraftIssue{id}} fieldValueByName(name:$field){__typename ... on ProjectV2ItemFieldSingleSelectValue{name optionId field{... on ProjectV2SingleSelectField{id}}}}} pageInfo{hasNextPage endCursor}}}}}', { id: project.id, cursor, field: config.project.status_field });
     const connection = data.node?.items;
@@ -165,6 +171,8 @@ export async function projectStatuses(api, config) {
       items.set(item.content.id, { id: item.id, number: item.content.number, status: value?.name ?? config.project.empty_status });
     }
     cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
+    if (connection.pageInfo.hasNextPage && (!cursor || seen.has(cursor) || seen.size >= 100)) throw new Error('Project item pagination did not advance or exceeded limit');
+    if (cursor) seen.add(cursor);
   } while (cursor);
   return { project, field: fields[0], items };
 }

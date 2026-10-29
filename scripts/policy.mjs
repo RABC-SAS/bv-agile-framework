@@ -105,6 +105,11 @@ export function validateIssue(config, { issue, status, parent = null, children =
   const errors = [];
   const type = issueType(issue);
   const label = type ?? 'untyped issue';
+  const descriptions = sections(issue.body, config.forms.description_heading);
+  if (descriptions.length > 1 || (config.forms.description_required &&
+      (descriptions.length !== 1 || !hasContent(descriptions[0], config.validation.placeholders)))) {
+    errors.push(`${config.forms.description_heading}: section is missing, duplicated, empty or placeholder`);
+  }
   if (status === undefined) errors.push('Project status is unreadable');
   else if (status !== null && !config.project.statuses.includes(status)) errors.push(`Unknown project status: ${status}`);
   for (const field of Object.values(config.fields)) {
@@ -129,9 +134,9 @@ export function validateIssue(config, { issue, status, parent = null, children =
       if (config.validation.check_field_applicability && !field.applies_to.includes(type) && values.some(candidate => present(candidate.value))) {
         errors.push(`${field.name}: does not apply to ${label}`);
       }
-    } else if (required) {
+    } else {
       const values = sections(issue.body, field.heading);
-      if (values.length !== 1 || !hasContent(values[0], config.validation.placeholders)) {
+      if (values.length > 1 || (required && (values.length !== 1 || !hasContent(values[0], config.validation.placeholders)))) {
         errors.push(`${field.name}: required for ${label} at ${status}; section is missing, duplicated, empty or placeholder`);
       }
     }
