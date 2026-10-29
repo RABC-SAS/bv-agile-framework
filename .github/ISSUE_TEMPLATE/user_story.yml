@@ -1,0 +1,23 @@
+# Generated from .github/planning/hierarchy.yml
+name: User Story
+description: Create User Story
+type: User Story
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+    validations:
+      required: false
+  - type: textarea
+    id: delivery_evidence
+    attributes:
+      label: Delivery Evidence
+    validations:
+      required: false

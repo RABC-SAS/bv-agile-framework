@@ -1,0 +1,10 @@
+# Generated from .github/planning/hierarchy.yml
+name: Untyped Issue
+description: Create Untyped Issue
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
