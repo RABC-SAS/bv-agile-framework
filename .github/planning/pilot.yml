@@ -1,0 +1,27 @@
+schema_version: 1
+# Change all target coordinates before running against another organization.
+organization: RABC-SAS
+repository: bv-agile-framework
+expected_actor: roanboc
+hierarchy: .github/planning/hierarchy.yml
+project:
+  number: 2
+  title: Agile Project Config
+  template: manual
+roles:
+  agent: delegated-agent
+  human: simulated-human
+fixture:
+  key: portable-demo
+  title: "[SIMULADO bv-pilot] Recorrido humano-agente"
+  type: Feature
+  cleanup: close
+controls:
+  branch: main
+  required_approvals: 1
+  expected_check: pilot-tests
+  expected_app_id: null
+  human_reviewers: []
+  # Out-of-band human Ed25519 public key only; never put a private key here.
+  authorization_signer: null
+  authorization_public_key: null

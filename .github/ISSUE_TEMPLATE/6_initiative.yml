@@ -1,0 +1,27 @@
+# Generated from .github/planning/hierarchy.yml
+name: Initiative
+description: Compromiso con un cliente o iniciativa interna.
+type: Initiative
+projects:
+  - RABC-SAS/2
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Resultados que se pueden comprobar. Obligatorio desde Ready.
+    validations:
+      required: false
+  - type: textarea
+    id: delivery_evidence
+    attributes:
+      label: Delivery Evidence
+      description: Enlaces o notas que muestran lo entregado. Obligatorio desde In review.
+    validations:
+      required: false

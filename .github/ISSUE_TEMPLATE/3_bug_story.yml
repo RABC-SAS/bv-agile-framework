@@ -1,0 +1,21 @@
+# Generated from .github/planning/hierarchy.yml
+name: Bug Story
+description: Algo que no funciona como debería.
+type: Bug Story
+projects:
+  - RABC-SAS/2
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries
+      description: Solo si la ejecuta un agente. Archivos o carpetas que puede tocar y
+        lo que no debe hacer.
+    validations:
+      required: false
