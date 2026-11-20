@@ -32,34 +32,116 @@ hierarchy:
   - parent: Bug Story
     children: [Task, null]
 
+# Field contract:
+#   storage: issue_body (heading + form_id, for long text) or organization_field (data_type, options).
+#   applies_to / required_on: issue types; null is the untyped issue.
+#   required_from_status: first project status where the field is required; cumulative.
+#   required_when: required only while another single-select field has one of the listed values.
+#   required_without_children: required only on issues with no sub-issues, so time is not counted twice.
+#   inherit_from_ancestors: a value on any parent satisfies the requirement.
+#   minimum: lowest accepted number.
+#   hint / description: help text shown in the form or on the field.
+# Add a field only when someone reads it in a report or needs it to do the work.
 fields:
   acceptance_criteria:
     name: Acceptance Criteria
     storage: issue_body
     heading: Acceptance Criteria
     form_id: acceptance_criteria
+    hint: Resultados que se pueden comprobar. Obligatorio desde Ready.
     applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
     required_from_status: Ready
+  boundaries:
+    name: Boundaries
+    storage: issue_body
+    heading: Boundaries
+    form_id: boundaries
+    hint: Solo si la ejecuta un agente. Archivos o carpetas que puede tocar y lo que no debe hacer.
+    applies_to: [User Story, Bug Story]
+    required_on: [User Story, Bug Story]
+    required_from_status: Ready
+    required_when:
+      field: Execution Mode
+      in: [Copilot attended, Autonomous with checkpoint]
   delivery_evidence:
     name: Delivery Evidence
     storage: issue_body
     heading: Delivery Evidence
     form_id: delivery_evidence
+    hint: Enlaces o notas que muestran lo entregado. Obligatorio desde In review.
     applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
     required_from_status: In review
   cost_centre:
     name: Cost Centre
+    description: Centro de costo que paga el trabajo; se hereda del issue padre
     storage: organization_field
     data_type: text
-    applies_to: [Initiative, Epic, Feature]
+    applies_to: [Initiative, Epic, Feature, User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: Done
+    required_without_children: true
+    inherit_from_ancestors: true
+  work_category:
+    name: Work Category
+    description: Clase de trabajo, para los reportes de tiempo y costo
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Delivery, color: blue, priority: 1 }
+      - { name: Meeting, color: yellow, priority: 2 }
+      - { name: Support, color: orange, priority: 3 }
+      - { name: Presales, color: purple, priority: 4 }
+      - { name: Training, color: green, priority: 5 }
+      - { name: Administration, color: gray, priority: 6 }
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [Task, null]
+    required_from_status: Done
+  time_spent:
+    name: Time Spent
+    description: Horas humanas dedicadas en total
+    storage: organization_field
+    data_type: number
+    minimum: 0
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: Done
+    required_without_children: true
+  remaining_work:
+    name: Remaining Work
+    description: Horas humanas que faltan, estimadas; opcional
+    storage: organization_field
+    data_type: number
+    minimum: 0
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: []
+  execution_mode:
+    name: Execution Mode
+    description: Quién ejecuta el trabajo; opcional. Con un agente, la historia necesita Boundaries
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Human only, color: gray, priority: 1 }
+      - { name: Copilot attended, color: blue, priority: 2 }
+      - { name: Autonomous with checkpoint, color: purple, priority: 3 }
+    applies_to: [User Story, Bug Story, Task, null]
     required_on: []
 
 forms:
   description_form_id: description
   description_heading: Description
   description_required: true
+  # Order in the "New issue" chooser: simple work first.
+  order: [Task, User Story, Bug Story, Feature, Epic, Initiative, null]
+  descriptions:
+    Task: Tarea o reunión. Al terminar pide categoría, centro de costo y horas.
+    User Story: Trabajo con criterios de aceptación que entrega valor a un usuario.
+    Bug Story: Algo que no funciona como debería.
+    Feature: Capacidad que agrupa varias historias.
+    Epic: Objetivo que agrupa varias features.
+    Initiative: Compromiso con un cliente o iniciativa interna.
+    Untyped Issue: Paso pequeño dentro de una historia.
 
 validation:
   mode: report_only
@@ -67,7 +149,7 @@ validation:
   enforce_allowed_parent_child_types: true
   terminal_types: [Task, null]
   check_field_applicability: true
-  marker: '<!-- bv-agile-framework-validation:v1 -->'
+  marker: '<!-- bv-agile-framework-validation:v2 -->'
 
 smoke_test:
   marker: bv-agile-framework-smoke

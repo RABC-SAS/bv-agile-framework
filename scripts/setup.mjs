@@ -9,7 +9,7 @@ export async function provision(api, ledger, config, kind) {
   const before = await api.list(path);
   if (kind === 'type' && before.some(resource => resource.name === 'Issue')) throw new Error('Unmanaged Issue type exists; stop');
   const definitions = kind === 'type' ? config.issue_types.map(name => ({ name, is_enabled: true }))
-    : Object.values(config.fields).filter(field => field.storage === 'organization_field').map(field => ({ name: field.name, data_type: field.data_type, ...(field.options ? { options: field.options } : {}) }));
+    : Object.values(config.fields).filter(field => field.storage === 'organization_field').map(field => ({ name: field.name, data_type: field.data_type, ...(field.description ? { description: field.description } : {}), ...(field.options ? { options: field.options } : {}) }));
   const planned = [];
   for (const definition of definitions) {
     const matches = before.filter(resource => resource.name === definition.name);

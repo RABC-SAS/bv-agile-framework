@@ -8,14 +8,15 @@ El simulador nunca concede autorizaciones reales ni publica releases.
 
 | Componente | Responsabilidad |
 | --- | --- |
-| [Politica de planificacion](.github/planning/hierarchy.yml) | Jerarquia, tipos, campos, estados y encabezados del cuerpo de los issues. |
+| [Politica de planificacion](.github/planning/hierarchy.yml) | Jerarquia, tipos, campos, estados, reglas por estado y encabezados del cuerpo de los issues. |
 | [Configuracion portable](.github/planning/pilot.yml) | Destino, proyecto, identidad delegada esperada, roles ficticios y controles propuestos. |
 | [Cliente y manifiesto](scripts/api.mjs) | Consultas GitHub, limites, bloqueo de escrituras en dry-run y registro externo de recursos propios. |
 | [Bootstrap y fixtures](scripts/pilot-kit.mjs) | Descubrir recursos, crear solo faltantes, conservar configuracion compartida y cerrar solo el ejemplo propio. |
 | [Comandos del kit](scripts/pilot.mjs) | Preflight, plan, bootstrap, fixtures, recuperacion, limpieza y simulacion. |
 | [Compuertas simuladas](scripts/simulation.mjs) | Recorrido positivo y 87 negativos, ligados a alcance, commit y resumen del artefacto. |
 | [Aplicacion administrativa](scripts/controls.mjs) | Crear un ruleset propio solo con plan firmado, identidad humana independiente y prerrequisitos verificados. |
-| [Planificacion existente](scripts/planning.mjs) | Generar/comprobar formularios, configurar tipos/campos y ejecutar el validador manual report_only. |
+| [Planificacion existente](scripts/planning.mjs) | Generar/comprobar formularios, configurar tipos/campos y ejecutar el validador report_only. |
+| [Revision diaria](.github/workflows/planning-check.yml) | Revisar cada dia habil todo el proyecto y dejar una nota en los issues con datos faltantes. |
 | [Pruebas reproducibles](test/pilot.test.mjs) | Contrato de formularios, estados, jerarquia, compuertas, idempotencia, propiedad y fallos de acceso. |
 
 ```mermaid
@@ -102,8 +103,10 @@ Los eventos locales son editables y no constituyen un sistema de autorizacion co
 
 | Superficie | Validacion efectiva | Limite |
 | --- | --- | --- |
-| Formularios y cuerpo | Description obligatoria; secciones duplicadas rechazadas; contenido vacio o placeholder insuficiente cuando es obligatorio. | Los inputs terminan en un unico cuerpo Markdown; no son tres campos nativos. |
-| Estados | Acceptance Criteria desde Ready, incluido In progress; Delivery Evidence desde In review. | Reporta incumplimientos; no bloquea cambios de estado en Projects. |
+| Formularios y cuerpo | Description obligatoria; secciones duplicadas rechazadas; contenido vacio o placeholder insuficiente cuando es obligatorio. | Los inputs terminan en un unico cuerpo Markdown; no son campos nativos. |
+| Alcance | Todos los issues del proyecto compartido, de cualquier repositorio de la organizacion. | Un issue fuera del proyecto no se revisa; el token debe poder leer todos los repositorios. |
+| Estados | Cada campo es obligatorio desde un estado y sigue obligatorio en los posteriores; la tabla de campos y reglas lista todos. | Deja una nota con lo que falta; no bloquea ni revierte cambios de estado en Projects. |
+| Campos nativos | Condiciones entre campos, herencia desde cualquier padre, minimo numerico y aplicabilidad por tipo. | La herencia solo lee padres de la misma organizacion; el pinning por tipo es manual. |
 | Jerarquia | Initiative > Epic > Feature > User Story/Bug Story > Task/issue sin tipo; terminales, ciclos y aplicabilidad de campos. | La configuracion conserva las excepciones de tipos del validador existente. |
 | Simulacion | Cada gate presente, positivo, ordenado, vigente y del actor correcto; checklist completo y evidencia. | No ejecuta implementaciones, pruebas de negocio, scanners, reviews ni releases reales. |
 | Invalidacion | Rechaza alcance, commit o artefacto distintos y decisiones de otra ejecucion, repetidas o de agente. | El evaluador requiere contexto de ejecucion independiente; no autentica humanos reales. |
@@ -112,9 +115,43 @@ Los eventos locales son editables y no constituyen un sistema de autorizacion co
 | Aplicacion administrativa | Plan firmado vigente, destino/estado base exactos, revisor con acceso, CODEOWNERS y check exitoso del App y SHA esperados. | Solo crea un ruleset nuevo. Rechaza controles preexistentes y no despliega identidades, checks, scanners ni release. |
 
 Los formularios aparecen en la interfaz de creacion cuando estan publicados en la rama predeterminada.
-Al editar, GitHub muestra un cuerpo con `### Description`, `### Acceptance Criteria` y `### Delivery Evidence`.
+Al editar, GitHub muestra un cuerpo con un encabezado `###` por seccion, como `### Description` y `### Acceptance Criteria`.
 El validador usa esos mismos encabezados para formularios, agentes, interfaz de linea de comandos y API, la interfaz de programacion.
 En Backlog permite criterios/evidencia ausentes o `_No response_`; desde su estado obligatorio los rechaza.
+
+## Un solo proyecto para toda la compania
+
+Todo el trabajo vive en un proyecto de la organizacion; los issues viven en el repositorio donde se hace el trabajo.
+El proyecto es el backlog comun; cada persona usa una vista filtrada por repositorio, por responsable o por centro de costo.
+El trabajo sin codigo, como tareas y reuniones, entra por el formulario Task, que aparece primero al crear un issue.
+Cada formulario agrega el issue al proyecto, asi nadie tiene que hacerlo a mano.
+Cerrar un issue lo pasa a Done cuando el proyecto tiene activa esa automatizacion; el [procedimiento operativo](SETUP.md#proyecto-y-plantilla) lista los pasos manuales.
+
+## Campos y reglas por estado
+
+La [politica](.github/planning/hierarchy.yml) define tres secciones de texto y cinco campos.
+Solo se agrega un campo cuando alguien lo lee en un reporte o lo necesita para hacer el trabajo.
+Lo exigido en un estado sigue exigido en los posteriores.
+
+| Desde | Aplica a | Obligatorio |
+| --- | --- | --- |
+| Ready | Initiative, Epic, Feature, User Story | Acceptance Criteria |
+| Ready | User Story o Bug Story que ejecuta un agente | Boundaries |
+| In review | Initiative, Epic, Feature, User Story | Delivery Evidence |
+| Done | User Story, Bug Story, Task e issue sin tipo, sin sub-issues | Cost Centre, Time Spent |
+| Done | Task e issue sin tipo | Work Category |
+
+Una tarea o reunion solo necesita Work Category, Cost Centre y Time Spent al llegar a Done.
+Cost Centre se hereda de cualquier padre: basta definirlo una vez arriba.
+Un issue con sub-issues no registra tiempo propio; lo registran sus hijos, y asi no se cuenta dos veces.
+Time Spent y Remaining Work se miden en horas humanas y se escriben en el campo; cero es un valor valido.
+Remaining Work y Execution Mode son opcionales.
+Una historia la ejecuta un agente cuando Execution Mode esta en `Copilot attended` o `Autonomous with checkpoint`.
+Boundaries dice que archivos puede tocar el agente y que no debe hacer.
+
+La [revision diaria](.github/workflows/planning-check.yml) recorre el proyecto cada dia habil.
+Deja una sola nota en cada issue al que le falta algo, con el campo que falta y donde escribirlo, y la actualiza cuando se completa.
+Un issue completo no recibe ninguna nota.
 
 ## Evidencia del piloto
 

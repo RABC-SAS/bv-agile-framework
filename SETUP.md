@@ -163,9 +163,35 @@ En la tabla del proyecto, usa `+` > `Hidden fields` > `Type`, luego configura lo
 No crees un campo custom llamado Type.
 El kit no promete habilitarlo mediante una mutacion de campo custom.
 
-En la configuracion de planificacion de la organizacion, comprueba la aplicabilidad de Cost Centre a Initiative, Epic y Feature.
-Vincula el campo organizacional existente al proyecto, sin crear una copia local.
-El bootstrap crea su definicion cuando falta; no configura su pinning.
+La politica declara cinco campos organizacionales: Cost Centre, Work Category, Time Spent, Remaining Work y Execution Mode.
+El bootstrap crea las definiciones que falten, con sus opciones y descripcion; no modifica campos existentes ni configura su pinning.
+Una organizacion admite 25 campos y cada tipo admite 10 campos fijados; el bootstrap se detiene antes de superar el primer limite.
+En la configuracion de planificacion de la organizacion, fija en cada tipo los campos que `applies_to` le asigna.
+Vincula cada campo organizacional al proyecto, sin crear una copia local.
+Si un campo ya existe con opciones distintas, el plan reporta el conflicto y no lo cambia.
+
+Un solo proyecto recibe los issues de todos los repositorios; estos pasos son manuales y se hacen una vez.
+
+| Paso | Donde | Para que |
+| --- | --- | --- |
+| Activar `Item closed` con Status en Done | Proyecto > Workflows | Cerrar un issue lo deja en Done. |
+| Activar `Auto-add to project`, una regla por repositorio | Proyecto > Workflows | Entran tambien los issues creados sin formulario; el numero de reglas depende del plan. |
+| Activar `Auto-archive items` | Proyecto > Workflows | El proyecto no crece sin limite; lo archivado deja de revisarse. |
+| Copiar los formularios al repositorio `.github` de la organizacion | `.github/ISSUE_TEMPLATE` | Los repositorios sin formularios propios ofrecen los mismos. |
+| Crear un repositorio para el trabajo sin codigo | Organizacion | Tareas y reuniones no quedan entre repositorios de codigo. |
+| Dar lectura de cada repositorio al equipo | Organizacion | Un item de un repositorio sin acceso aparece oculto en el proyecto. |
+
+Crea una vista por audiencia en lugar de un tablero unico.
+
+| Vista | Filtro o agrupacion | Para quien |
+| --- | --- | --- |
+| Mi trabajo | `assignee:@me is:open`, tablero por Status | Cada persona |
+| Backlog | `is:open`, tabla ordenada por Priority | Todo el equipo |
+| Por repositorio | `repo:` con el repositorio, tablero por Status | Quien se enfoca en un repositorio |
+| Horas | Tabla agrupada por Cost Centre, con la suma de Time Spent | Administracion y finanzas |
+
+Los formularios agregan el issue al proyecto solo si quien lo crea puede escribir en el proyecto.
+La suma por grupo existe para campos numericos del proyecto; no se comprobo con campos organizacionales.
 
 Para una plantilla reutilizable, marca el proyecto apropiado como template desde sus ajustes, si tu producto y permisos lo permiten.
 Comprueba esa capacidad en el destino.
@@ -254,26 +280,64 @@ Editar por interfaz, agente o API no cambia el contrato de encabezados.
 El validador rechaza Description ausente, vacia, duplicada o placeholder.
 Rechaza duplicados de secciones opcionales incluso en Backlog.
 Desde Ready exige Acceptance Criteria; desde In review exige tambien Delivery Evidence.
-La regla aplica a Initiative, Epic, Feature y User Story; Bug Story, Task e issues sin tipo conservan su excepcion.
+Esa regla aplica a Initiative, Epic, Feature y User Story.
+Bug Story, Task e issues sin tipo siguen sin criterios ni evidencia, pero al llegar a Done piden tiempo y centro de costo.
+La [tabla de campos y reglas](README.md#campos-y-reglas-por-estado) lista cada obligacion por estado y tipo.
 Una checklist de criterios sin marcar puede tener contenido valido; no representa aprobacion.
+Sin `--numbers`, revisa todos los issues del proyecto, de cualquier repositorio de la organizacion.
+Con `--numbers`, revisa esos issues del repositorio configurado, esten o no en el proyecto.
 Fuera del proyecto no aplica compuertas por estado; conserva jerarquia, Description y aplicabilidad.
 
-Sin `--dry-run`, `planning validate` publica o actualiza un unico comentario del mismo reporter.
-Los comentarios son reportes editables, nunca aprobaciones humanas.
+Sin `--dry-run`, `planning validate` deja una sola nota del mismo reporter en cada issue al que le falta algo.
+La nota dice que falta y donde escribirlo; se actualiza en el mismo comentario y pasa a `Datos completos` cuando se resuelve.
+Un issue completo y sin nota previa no recibe comentario.
+Las notas son avisos editables, nunca aprobaciones humanas.
 No cambia estados ni bloquea transiciones.
 Los marcadores duplicados o ajenos provocan error.
+Un problema de acceso se reporta una vez en la salida del comando, no como nota en cada issue.
+Con `--tolerate-violations` el comando solo falla cuando no pudo revisar o reportar.
 
 Para extender campos, usa `storage: issue_body` con `heading` y `form_id`, o `storage: organization_field` con `data_type`.
 Los tipos nativos admitidos son text, number, date, single_select y multi_select; las selecciones requieren opciones.
 `required_on` y `required_from_status` determinan obligatoriedad acumulativa; `applies_to` determina aplicabilidad.
+`required_when` exige el campo solo mientras otro campo de seleccion unica tenga uno de los valores listados.
+`required_without_children` lo exige solo en issues sin sub-issues.
+`inherit_from_ancestors` acepta el valor de cualquier padre, tambien para evaluar una condicion; solo vale en campos organizacionales.
+`minimum` rechaza numeros menores; `description` se copia al crear el campo y `hint` explica una seccion en el formulario.
+`forms.order` ordena los formularios y `forms.descriptions` dice para que sirve cada uno.
+Las opciones llevan solo `name`, `color` y `priority`; un nombre que sea placeholder, como `N/A`, se rechaza al cargar la politica.
 Regenera formularios y ejecuta pruebas despues de modificar la politica.
 Las reglas nuevas fuera de este contrato requieren codigo y pruebas, no solo una clave YAML.
+
+La lectura de valores de campos nativos, propios y heredados, se probo con dobles de prueba, no contra GitHub.
+Ejecuta `validate` con `--dry-run` sobre un issue real antes de confiar en sus notas.
+
+## Revision diaria
+
+El [workflow](.github/workflows/planning-check.yml) ejecuta `validate` de lunes a viernes a las 11:17 UTC y tambien a mano.
+Solo corre desde la rama predeterminada, asi que empieza a funcionar despues del merge.
+No usa el token del workflow, porque ese token no lee proyectos de la organizacion ni otros repositorios.
+Usa una GitHub App instalada en la organizacion.
+
+| Requisito | Valor |
+| --- | --- |
+| Permisos de repositorio de la App | Issues: lectura y escritura; Metadata: lectura |
+| Permisos de organizacion de la App | Projects: lectura; lectura de los campos de issues |
+| Repositorios de la instalacion | Todos los que aportan issues al proyecto |
+| Variable `PLANNING_APP_CLIENT_ID` | Client ID de la App |
+| Secreto `PLANNING_APP_PRIVATE_KEY` | Clave privada de la App |
+
+El nombre exacto del permiso que lee los campos de issues no se verifico; compruebalo al crear la App.
+Las acciones estan fijadas por SHA y el job solo ejecuta codigo de este repositorio.
+El contenido de los issues se lee como datos; nunca se ejecuta.
+El workflow no se ha ejecutado contra GitHub: lanza la primera corrida a mano y revisa su salida.
 
 ## Adopcion real
 
 El plan administrativo y la aceptacion del simulador son decisiones diferentes.
 PR, seguridad, pruebas finales del usuario, UAT, y release tambien requieren decisiones independientes del candidato exacto.
 Un scanner, una review automatica o un checkbox no sustituyen esas decisiones.
-Este kit no instala enforcement continuo, scanners, pipelines de release ni workflows privilegiados.
+Este kit no instala enforcement continuo, scanners ni pipelines de release.
+Su unico workflow es la revision diaria, que solo comenta.
 Los workflows futuros necesitan permisos minimos, acciones fijadas por SHA y aislamiento de codigo no confiable respecto de secretos.
 No uses `pull_request_target` ni `workflow_run` para ejecutar codigo no confiable con permisos privilegiados.
