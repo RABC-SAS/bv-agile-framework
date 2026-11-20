@@ -571,6 +571,10 @@ test('CLI simulation is offline, persistent and explicit writes require exact co
 });
 
 test('portable config changes all coordinates and rejects real logins as simulated roles', t => {
+  // GitHub Actions sets GITHUB_REPOSITORY; this test moves the target on purpose.
+  const workflowRepository = process.env.GITHUB_REPOSITORY;
+  delete process.env.GITHUB_REPOSITORY;
+  t.after(() => { if (workflowRepository !== undefined) process.env.GITHUB_REPOSITORY = workflowRepository; });
   const ledger = temporaryLedger(t);
   const original = readFileSync('.github/planning/pilot.yml', 'utf8');
   const path = join(ledger.path, '..', 'portable.yml');
