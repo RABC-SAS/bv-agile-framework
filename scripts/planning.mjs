@@ -11,7 +11,6 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   config: { type: 'string', default: '.github/planning/hierarchy.yml' },
   manifest: { type: 'string' },
   numbers: { type: 'string' },
-  'tolerate-violations': { type: 'boolean', default: false },
 } });
 
 try {
@@ -54,8 +53,7 @@ try {
     const actor = process.env.AGILE_REPORTER_LOGIN || (process.env.GITHUB_ACTIONS === 'true' ? 'github-actions[bot]' : (await api.request('user')).login);
     const validation = await reconcile(api, ledger(), config, { numbers, actor });
     result = { ...validation, results: validation.results.map(({ snapshot, ...row }) => ({ ...row, status: snapshot?.status })) };
-    // The scheduled check fails only when it could not do its job, not when people still owe data.
-    if (validation.failures || validation.access_errors.length || (validation.violations && !values['tolerate-violations'])) process.exitCode = 1;
+    if (validation.failures || validation.access_errors.length || validation.violations) process.exitCode = 1;
   } else if (command === 'inspect') {
     const project = await projectStatuses(api, config);
     const types = await api.list(`orgs/${config.organization}/issue-types`);

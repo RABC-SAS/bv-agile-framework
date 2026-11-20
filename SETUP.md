@@ -294,7 +294,6 @@ Las notas son avisos editables, nunca aprobaciones humanas.
 No cambia estados ni bloquea transiciones.
 Los marcadores duplicados o ajenos provocan error.
 Un problema de acceso se reporta una vez en la salida del comando, no como nota en cada issue.
-Con `--tolerate-violations` el comando solo falla cuando no pudo revisar o reportar.
 
 Para extender campos, usa `storage: issue_body` con `heading` y `form_id`, o `storage: organization_field` con `data_type`.
 Los tipos nativos admitidos son text, number, date, single_select y multi_select; las selecciones requieren opciones.
@@ -311,25 +310,8 @@ Las reglas nuevas fuera de este contrato requieren codigo y pruebas, no solo una
 La lectura de valores de campos nativos, propios y heredados, se probo con dobles de prueba, no contra GitHub.
 Ejecuta `validate` con `--dry-run` sobre un issue real antes de confiar en sus notas.
 
-## Revision diaria
-
-El [workflow](.github/workflows/planning-check.yml) ejecuta `validate` de lunes a viernes a las 11:17 UTC y tambien a mano.
-Solo corre desde la rama predeterminada, asi que empieza a funcionar despues del merge.
-No usa el token del workflow, porque ese token no lee proyectos de la organizacion ni otros repositorios.
-Usa una GitHub App instalada en la organizacion.
-
-| Requisito | Valor |
-| --- | --- |
-| Permisos de repositorio de la App | Issues: lectura y escritura; Metadata: lectura |
-| Permisos de organizacion de la App | Projects: lectura; lectura de los campos de issues |
-| Repositorios de la instalacion | Todos los que aportan issues al proyecto |
-| Variable `PLANNING_APP_CLIENT_ID` | Client ID de la App |
-| Secreto `PLANNING_APP_PRIVATE_KEY` | Clave privada de la App |
-
-El nombre exacto del permiso que lee los campos de issues no se verifico; compruebalo al crear la App.
-Las acciones estan fijadas por SHA y el job solo ejecuta codigo de este repositorio.
-El contenido de los issues se lee como datos; nunca se ejecuta.
-El workflow no se ha ejecutado contra GitHub: lanza la primera corrida a mano y revisa su salida.
+Las reglas son una guia; no hay revision automatica.
+Ejecutar `validate` a mano requiere una cuenta que lea el proyecto, los campos de la organizacion y los repositorios que aportan issues.
 
 ## Adopcion real
 
@@ -337,6 +319,5 @@ El plan administrativo y la aceptacion del simulador son decisiones diferentes.
 PR, seguridad, pruebas finales del usuario, UAT, y release tambien requieren decisiones independientes del candidato exacto.
 Un scanner, una review automatica o un checkbox no sustituyen esas decisiones.
 Este kit no instala enforcement continuo, scanners ni pipelines de release.
-Su unico workflow es la revision diaria, que solo comenta.
 Los workflows futuros necesitan permisos minimos, acciones fijadas por SHA y aislamiento de codigo no confiable respecto de secretos.
 No uses `pull_request_target` ni `workflow_run` para ejecutar codigo no confiable con permisos privilegiados.

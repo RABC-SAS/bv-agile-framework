@@ -16,7 +16,6 @@ El simulador nunca concede autorizaciones reales ni publica releases.
 | [Compuertas simuladas](scripts/simulation.mjs) | Recorrido positivo y 87 negativos, ligados a alcance, commit y resumen del artefacto. |
 | [Aplicacion administrativa](scripts/controls.mjs) | Crear un ruleset propio solo con plan firmado, identidad humana independiente y prerrequisitos verificados. |
 | [Planificacion existente](scripts/planning.mjs) | Generar/comprobar formularios, configurar tipos/campos y ejecutar el validador report_only. |
-| [Revision diaria](.github/workflows/planning-check.yml) | Revisar cada dia habil todo el proyecto y dejar una nota en los issues con datos faltantes. |
 | [Pruebas reproducibles](test/pilot.test.mjs) | Contrato de formularios, estados, jerarquia, compuertas, idempotencia, propiedad y fallos de acceso. |
 
 ```mermaid
@@ -149,9 +148,8 @@ Execution Mode es opcional.
 Una historia la ejecuta un agente cuando Execution Mode esta en `Copilot attended` o `Autonomous with checkpoint`.
 Boundaries dice que archivos puede tocar el agente y que no debe hacer.
 
-La [revision diaria](.github/workflows/planning-check.yml) recorre el proyecto cada dia habil.
-Deja una sola nota en cada issue al que le falta algo, con el campo que falta y donde escribirlo, y la actualiza cuando se completa.
-Un issue completo no recibe ninguna nota.
+Las reglas son una guia: los formularios muestran cada seccion con su ayuda y nada bloquea un cambio de estado.
+Quien quiera revisar el proyecto puede ejecutar `planning validate` a mano; el [procedimiento operativo](SETUP.md#validador-y-formularios) explica como.
 
 ## Evidencia del piloto
 
