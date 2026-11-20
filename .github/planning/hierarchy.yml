@@ -32,7 +32,22 @@ hierarchy:
   - parent: Bug Story
     children: [Task, null]
 
+# Field contract:
+#   storage: issue_body (heading + form_id) or organization_field (data_type, options).
+#   applies_to / required_on: issue types; null is the untyped issue.
+#   required_from_status: first project status where the field is required; cumulative.
+#   required_when: required only while another single-select field has one of the listed values.
+#   required_without_children: required only on issues with no sub-issues, so time is not counted twice.
+#   inherit_from_ancestors: a value on any parent satisfies the requirement and the condition.
+#   minimum: lowest accepted number.
 fields:
+  original_request:
+    name: Original Request
+    storage: issue_body
+    heading: Original Request
+    form_id: original_request
+    applies_to: [Initiative, Epic, Feature, User Story, Bug Story]
+    required_on: []
   acceptance_criteria:
     name: Acceptance Criteria
     storage: issue_body
@@ -41,6 +56,28 @@ fields:
     applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
     required_from_status: Ready
+  file_boundaries:
+    name: File Boundaries
+    storage: issue_body
+    heading: File Boundaries
+    form_id: file_boundaries
+    applies_to: [User Story, Bug Story]
+    required_on: [User Story, Bug Story]
+    required_from_status: Ready
+    required_when:
+      field: Execution Mode
+      in: [Copilot attended, Autonomous with checkpoint]
+  restrictions:
+    name: Restrictions
+    storage: issue_body
+    heading: Restrictions
+    form_id: restrictions
+    applies_to: [User Story, Bug Story]
+    required_on: [User Story, Bug Story]
+    required_from_status: Ready
+    required_when:
+      field: Execution Mode
+      in: [Copilot attended, Autonomous with checkpoint]
   delivery_evidence:
     name: Delivery Evidence
     storage: issue_body
@@ -49,12 +86,135 @@ fields:
     applies_to: [Initiative, Epic, Feature, User Story]
     required_on: [Initiative, Epic, Feature, User Story]
     required_from_status: In review
+  findings_disposition:
+    name: Findings Disposition
+    storage: issue_body
+    heading: Findings Disposition
+    form_id: findings_disposition
+    applies_to: [User Story, Bug Story]
+    required_on: [User Story, Bug Story]
+    required_from_status: Done
   cost_centre:
     name: Cost Centre
     storage: organization_field
     data_type: text
+    applies_to: [Initiative, Epic, Feature, User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: Done
+    required_without_children: true
+    inherit_from_ancestors: true
+  engagement:
+    name: Engagement
+    description: Client engagement or internal initiative that pays for the work
+    storage: organization_field
+    data_type: text
+    applies_to: [Initiative, Epic, Feature, User Story, Bug Story, Task, null]
+    required_on: [Initiative]
+    required_from_status: Ready
+    inherit_from_ancestors: true
+  billing_model:
+    name: Billing Model
+    description: How the engagement is charged; decides whether estimates are required
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Fixed price, color: blue, priority: 1 }
+      - { name: Outcome based, color: green, priority: 2 }
+      - { name: Revenue share, color: purple, priority: 3 }
+      - { name: Time and materials, color: orange, priority: 4 }
+      - { name: Internal, color: gray, priority: 5 }
+    applies_to: [Initiative, Epic, Feature, User Story, Bug Story, Task, null]
+    required_on: [Initiative]
+    required_from_status: Ready
+    inherit_from_ancestors: true
+  work_category:
+    name: Work Category
+    description: Kind of work, for time and cost reports
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Delivery, color: blue, priority: 1 }
+      - { name: Meeting, color: yellow, priority: 2 }
+      - { name: Support, color: orange, priority: 3 }
+      - { name: Presales, color: purple, priority: 4 }
+      - { name: Training, color: green, priority: 5 }
+      - { name: Administration, color: gray, priority: 6 }
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [Task, null]
+    required_from_status: Done
+  execution_mode:
+    name: Execution Mode
+    description: Who executes the work; agent modes require file boundaries and restrictions
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Human only, color: gray, priority: 1 }
+      - { name: Copilot attended, color: blue, priority: 2 }
+      - { name: Autonomous with checkpoint, color: purple, priority: 3 }
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story]
+    required_from_status: Ready
+  original_estimate:
+    name: Original Estimate
+    description: Estimated human hours before work starts
+    storage: organization_field
+    data_type: number
+    minimum: 0
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: Ready
+    required_without_children: true
+    required_when:
+      field: Billing Model
+      in: [Time and materials]
+  remaining_work:
+    name: Remaining Work
+    description: Estimated human hours left
+    storage: organization_field
+    data_type: number
+    minimum: 0
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: In progress
+    required_without_children: true
+    required_when:
+      field: Billing Model
+      in: [Time and materials]
+  time_spent:
+    name: Time Spent
+    description: Total human hours spent; a cost measure, not a planning unit
+    storage: organization_field
+    data_type: number
+    minimum: 0
+    applies_to: [User Story, Bug Story, Task, null]
+    required_on: [User Story, Bug Story, Task, null]
+    required_from_status: Done
+    required_without_children: true
+  replicability:
+    name: Replicability
+    description: Whether the delivered asset can be reused for another client
+    storage: organization_field
+    data_type: single_select
+    options:
+      - { name: Replicable, color: green, priority: 1 }
+      - { name: Not replicable, color: gray, priority: 2 }
     applies_to: [Initiative, Epic, Feature]
-    required_on: []
+    required_on: [Feature]
+    required_from_status: Done
+  asset_registration:
+    name: Asset Registration
+    description: Link to the asset registry entry, or the reason there is no asset
+    storage: organization_field
+    data_type: text
+    applies_to: [Initiative, Epic, Feature]
+    required_on: [Feature]
+    required_from_status: Done
+
+# Dated time entries are comments such as "/spent 1.5h 2026-11-20 Client workshop".
+# The total field holds the sum; `planning time-log` lists entries and reports differences.
+time_tracking:
+  command: /spent
+  total_field: Time Spent
 
 forms:
   description_form_id: description

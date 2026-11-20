@@ -163,9 +163,12 @@ En la tabla del proyecto, usa `+` > `Hidden fields` > `Type`, luego configura lo
 No crees un campo custom llamado Type.
 El kit no promete habilitarlo mediante una mutacion de campo custom.
 
-En la configuracion de planificacion de la organizacion, comprueba la aplicabilidad de Cost Centre a Initiative, Epic y Feature.
-Vincula el campo organizacional existente al proyecto, sin crear una copia local.
-El bootstrap crea su definicion cuando falta; no configura su pinning.
+La politica declara diez campos organizacionales: Cost Centre, Engagement, Billing Model, Work Category, Execution Mode, Original Estimate, Remaining Work, Time Spent, Replicability y Asset Registration.
+El bootstrap crea las definiciones que falten, con sus opciones y descripcion; no modifica campos existentes ni configura su pinning.
+Una organizacion admite 25 campos y cada tipo admite 10 campos fijados; el bootstrap se detiene antes de superar el primer limite.
+En la configuracion de planificacion de la organizacion, fija en cada tipo los campos que `applies_to` le asigna.
+Vincula cada campo organizacional al proyecto, sin crear una copia local.
+Si un campo ya existe con opciones distintas, el plan reporta el conflicto y no lo cambia.
 
 Para una plantilla reutilizable, marca el proyecto apropiado como template desde sus ajustes, si tu producto y permisos lo permiten.
 Comprueba esa capacidad en el destino.
@@ -244,6 +247,7 @@ No hay adaptador confiable de identidad humana ni verificacion de firmas.
 npm run planning -- generate-forms
 npm run planning -- check-forms --dry-run
 npm run planning -- validate --numbers 27 --dry-run --manifest $manifest
+npm run planning -- time-log --numbers 27 --dry-run
 ```
 
 La politica genera inputs separados al crear un issue y GitHub los convierte en secciones de un cuerpo Markdown.
@@ -254,7 +258,9 @@ Editar por interfaz, agente o API no cambia el contrato de encabezados.
 El validador rechaza Description ausente, vacia, duplicada o placeholder.
 Rechaza duplicados de secciones opcionales incluso en Backlog.
 Desde Ready exige Acceptance Criteria; desde In review exige tambien Delivery Evidence.
-La regla aplica a Initiative, Epic, Feature y User Story; Bug Story, Task e issues sin tipo conservan su excepcion.
+Esa regla aplica a Initiative, Epic, Feature y User Story.
+Bug Story, Task e issues sin tipo siguen sin criterios ni evidencia, pero tienen reglas propias de ejecucion, tiempo y costo.
+La [tabla de campos y reglas](README.md#campos-y-reglas-por-estado) lista cada obligacion por estado y tipo.
 Una checklist de criterios sin marcar puede tener contenido valido; no representa aprobacion.
 Fuera del proyecto no aplica compuertas por estado; conserva jerarquia, Description y aplicabilidad.
 
@@ -266,8 +272,19 @@ Los marcadores duplicados o ajenos provocan error.
 Para extender campos, usa `storage: issue_body` con `heading` y `form_id`, o `storage: organization_field` con `data_type`.
 Los tipos nativos admitidos son text, number, date, single_select y multi_select; las selecciones requieren opciones.
 `required_on` y `required_from_status` determinan obligatoriedad acumulativa; `applies_to` determina aplicabilidad.
+`required_when` exige el campo solo mientras otro campo de seleccion unica tenga uno de los valores listados.
+`required_without_children` lo exige solo en issues sin sub-issues.
+`inherit_from_ancestors` acepta el valor de cualquier padre, tambien para evaluar una condicion; solo vale en campos organizacionales.
+`minimum` rechaza numeros menores; `description` se copia al crear el campo.
+Las opciones llevan solo `name`, `color` y `priority`; un nombre que sea placeholder, como `N/A`, se rechaza al cargar la politica.
 Regenera formularios y ejecuta pruebas despues de modificar la politica.
 Las reglas nuevas fuera de este contrato requieren codigo y pruebas, no solo una clave YAML.
+
+`planning time-log` solo lee: lista las entradas `/spent` por issue, las lineas invalidas y la diferencia contra Time Spent.
+Ignora comentarios de bots y termina con error cuando hay diferencias o lineas invalidas.
+El total Time Spent se edita a mano; el kit no lo escribe.
+La lectura de valores de campos nativos, propios y heredados, se probo con dobles de prueba, no contra GitHub.
+Ejecuta `validate` y `time-log` con `--dry-run` sobre un issue real antes de confiar en sus reportes.
 
 ## Adopcion real
 

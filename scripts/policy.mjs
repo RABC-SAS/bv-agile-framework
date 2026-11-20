@@ -52,9 +52,43 @@ export function loadConfig(path = '.github/planning/hierarchy.yml') {
     } else if (field.storage === 'organization_field') {
       if (!['text', 'number', 'date', 'single_select', 'multi_select'].includes(field.data_type)) throw new Error(`Unsupported native data type: ${field.name}`);
       if (field.data_type.endsWith('select') && !field.options?.length) throw new Error(`Select field options required: ${field.name}`);
+      checkOptions(field, config.validation.placeholders);
     } else throw new Error(`Unsupported storage: ${field.name}`);
+    if (field.description !== undefined && typeof field.description !== 'string') throw new Error(`Invalid description: ${field.name}`);
+    for (const key of ['inherit_from_ancestors', 'required_without_children']) {
+      if (field[key] !== undefined && typeof field[key] !== 'boolean') throw new Error(`${key} must be true or false: ${field.name}`);
+    }
+    if (field.inherit_from_ancestors && field.storage !== 'organization_field') throw new Error(`Only organization fields can be inherited: ${field.name}`);
+    if (field.minimum !== undefined && (field.data_type !== 'number' || !Number.isFinite(field.minimum))) throw new Error(`minimum requires a number field: ${field.name}`);
+  }
+  for (const field of Object.values(config.fields)) {
+    if (field.required_when === undefined) continue;
+    const source = Object.values(config.fields).find(candidate => candidate.name === field.required_when?.field);
+    const values = field.required_when?.in;
+    if (!source || source === field || source.storage !== 'organization_field' || source.data_type !== 'single_select' || source.required_when) throw new Error(`required_when must name another unconditional single-select organization field: ${field.name}`);
+    if (!Array.isArray(values) || !values.length || values.some(value => !source.options.some(option => option.name === value))) throw new Error(`required_when lists an unknown option: ${field.name}`);
+  }
+  if (config.time_tracking !== undefined) {
+    const total = Object.values(config.fields).find(field => field.name === config.time_tracking.total_field);
+    if (!/^\/[a-z]+$/.test(config.time_tracking.command ?? '') || total?.storage !== 'organization_field' || total.data_type !== 'number') throw new Error('time_tracking needs a /command and a number organization field');
   }
   return config;
+}
+
+const optionColors = ['gray', 'blue', 'green', 'yellow', 'orange', 'red', 'pink', 'purple'];
+
+function checkOptions(field, placeholders) {
+  if (field.options === undefined) return;
+  if (!field.data_type.endsWith('select') || !Array.isArray(field.options)) throw new Error(`Options require a select field: ${field.name}`);
+  const names = field.options.map(option => option?.name);
+  const priorities = field.options.map(option => option?.priority);
+  if (new Set(names).size !== names.length || new Set(priorities).size !== priorities.length) throw new Error(`Option names and priorities must be unique: ${field.name}`);
+  for (const option of field.options) {
+    // A placeholder such as "N/A" as an option would always read as an empty value.
+    if (!hasContent(option.name, placeholders) || !optionColors.includes(option.color) || !Number.isSafeInteger(option.priority) || option.priority <= 0 || Object.keys(option).length !== 3) {
+      throw new Error(`Invalid option in ${field.name}: each needs only a real name, a supported color and a positive priority`);
+    }
+  }
 }
 
 export function hasContent(value, placeholders = []) {
@@ -101,7 +135,16 @@ export function issueType(issue) {
   return issue.type.name;
 }
 
-export function validateIssue(config, { issue, status, parent = null, children = [], ancestors = [], fieldValues, orgFields }) {
+// A select value may arrive as the option name or as the option object.
+export function nativeValue(row) {
+  if (!row) return undefined;
+  if (row.value !== undefined && row.value !== null) return row.value;
+  if (row.single_select_option?.name) return row.single_select_option.name;
+  if (Array.isArray(row.multi_select_options)) return row.multi_select_options.map(option => option.name);
+  return undefined;
+}
+
+export function validateIssue(config, { issue, status, parent = null, children = [], ancestors = [], fieldValues, orgFields, ancestorFieldValues }) {
   const errors = [];
   const type = issueType(issue);
   const label = type ?? 'untyped issue';
@@ -112,26 +155,47 @@ export function validateIssue(config, { issue, status, parent = null, children =
   }
   if (status === undefined) errors.push('Project status is unreadable');
   else if (status !== null && !config.project.statuses.includes(status)) errors.push(`Unknown project status: ${status}`);
+  const present = value => typeof value === 'string' ? hasContent(value, config.validation.placeholders) : typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) && value.length > 0;
+  const states = new Map();
+  // Reads one organization field: its own value and, when allowed, the nearest parent value.
+  const native = field => {
+    if (states.has(field.name)) return states.get(field.name);
+    const state = { values: [] };
+    states.set(field.name, state);
+    if (!Array.isArray(orgFields) || !Array.isArray(fieldValues)) return Object.assign(state, { error: `${field.name}: native field values or definitions are unreadable` });
+    const definitions = orgFields.filter(candidate => candidate.name === field.name);
+    if (definitions.length !== 1 || definitions[0].data_type !== field.data_type) return Object.assign(state, { error: `${field.name}: expected one organization ${field.data_type} field` });
+    const pick = rows => rows.filter(candidate => candidate.issue_field_id === definitions[0].id);
+    state.values = pick(fieldValues).map(row => ({ ...row, value: nativeValue(row) }));
+    state.ambiguous = state.values.length > 1 || state.values.some(candidate => candidate.data_type !== field.data_type);
+    if (!state.ambiguous && present(state.values[0]?.value)) state.effective = state.values[0].value;
+    else if (!state.ambiguous && field.inherit_from_ancestors && ancestors.length) {
+      if (!Array.isArray(ancestorFieldValues) || ancestorFieldValues.length !== ancestors.length || ancestorFieldValues.some(rows => !Array.isArray(rows))) state.inheritedUnreadable = true;
+      else state.effective = ancestorFieldValues.map(rows => nativeValue(pick(rows)[0])).find(present);
+    }
+    return state;
+  };
   for (const field of Object.values(config.fields)) {
-    const required = (field.required_on?.includes(type) ?? false) && status !== null && config.project.statuses.indexOf(status) >= config.project.statuses.indexOf(field.required_from_status);
+    const source = field.required_when && Object.values(config.fields).find(candidate => candidate.name === field.required_when.field);
+    const required = (field.required_on?.includes(type) ?? false) && status !== null && config.project.statuses.indexOf(status) >= config.project.statuses.indexOf(field.required_from_status)
+      && !(field.required_without_children && children.length > 0)
+      && (!source || field.required_when.in.includes(native(source).effective));
     if (field.storage === 'organization_field') {
-      if (!Array.isArray(orgFields) || !Array.isArray(fieldValues)) {
-        errors.push(`${field.name}: native field values or definitions are unreadable`);
+      const state = native(field);
+      if (state.error) {
+        errors.push(state.error);
         continue;
       }
-      const definitions = orgFields.filter(candidate => candidate.name === field.name);
-      if (definitions.length !== 1 || definitions[0].data_type !== field.data_type) {
-        errors.push(`${field.name}: expected one organization ${field.data_type} field`);
-        continue;
-      }
-      const values = fieldValues.filter(candidate => candidate.issue_field_id === definitions[0].id);
-      const present = value => typeof value === 'string' ? hasContent(value, config.validation.placeholders) : typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) && value.length > 0;
-      if (values.length > 1 || values.some(candidate => candidate.data_type !== field.data_type)) {
+      if (state.ambiguous) {
         errors.push(`${field.name}: ambiguous or incompatible field values`);
-      } else if (required && !present(values[0]?.value)) {
-        errors.push(`${field.name}: required for ${label} at ${status}; value is missing or placeholder`);
+      } else if (required && state.effective === undefined) {
+        errors.push(state.inheritedUnreadable ? `${field.name}: required for ${label} at ${status}; parent values are unreadable`
+          : `${field.name}: required for ${label} at ${status}; value is missing or placeholder${field.inherit_from_ancestors ? ' here and on every parent' : ''}`);
       }
-      if (config.validation.check_field_applicability && !field.applies_to.includes(type) && values.some(candidate => present(candidate.value))) {
+      if (field.minimum !== undefined && state.values.some(candidate => typeof candidate.value === 'number' && candidate.value < field.minimum)) {
+        errors.push(`${field.name}: must be at least ${field.minimum}`);
+      }
+      if (config.validation.check_field_applicability && !field.applies_to.includes(type) && state.values.some(candidate => present(candidate.value))) {
         errors.push(`${field.name}: does not apply to ${label}`);
       }
     } else {

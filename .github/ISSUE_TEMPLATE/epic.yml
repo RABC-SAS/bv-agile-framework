@@ -10,6 +10,12 @@ body:
     validations:
       required: true
   - type: textarea
+    id: original_request
+    attributes:
+      label: Original Request
+    validations:
+      required: false
+  - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria

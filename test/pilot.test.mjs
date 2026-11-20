@@ -9,6 +9,8 @@ import { GitHub, Ledger, ApiError } from '../scripts/api.mjs';
 import { loadPilot, preflight, plan, bootstrap, fixtures, cleanup, recover } from '../scripts/pilot-kit.mjs';
 import { candidate, digest, evaluate, scenario, simulate, consumeSimulation, stages, humanStages } from '../scripts/simulation.mjs';
 import { loadConfig, validateIssue, formDocuments, hasContent } from '../scripts/policy.mjs';
+import { snapshot } from '../scripts/validation.mjs';
+import { parseEntries, timeReport } from '../scripts/timelog.mjs';
 import YAML from 'yaml';
 import { applyControls, authorizationMessage, rulesetMatches, rulesetBody } from '../scripts/controls.mjs';
 
@@ -84,13 +86,25 @@ test('simulation receipt store rejects already-consumed decisions, but consumes 
 });
 
 const hierarchy = loadConfig();
-const issue = (body, type = 'Feature') => ({
+const nativeFields = config => Object.values(config.fields).filter(field => field.storage === 'organization_field')
+  .map((field, index) => ({ id: 7 + index, name: field.name, data_type: field.data_type, ...(field.options ? { options: field.options } : {}) }));
+const orgFields = nativeFields(hierarchy);
+const native = values => Object.entries(values).map(([name, value]) => {
+  const field = orgFields.find(candidate => candidate.name === name);
+  return { issue_field_id: field.id, issue_field_name: name, data_type: field.data_type, value };
+});
+const issue = (body, type = 'Feature', values = {}) => ({
   issue: { id: 1, type: type === null ? null : { name: type }, body },
-  orgFields: [{ id: 7, name: 'Cost Centre', data_type: 'text' }], fieldValues: [],
+  orgFields, fieldValues: native(values),
 });
 const description = '### Description\nA reproducible example.\n';
 const criteria = '### Acceptance Criteria\n- [ ] Observable outcome.\n';
 const evidence = '### Delivery Evidence\nTests on candidate abc.\n';
+const closing = { Replicability: 'Replicable', 'Asset Registration': 'https://example.com/registry/42' };
+const boundaries = '### File Boundaries\nsrc/orders/**\n';
+const restrictions = '### Restrictions\nDo not change the public API.\n';
+const findings = '### Findings Disposition\nNo findings.\n';
+const messages = (state, name) => validateIssue(hierarchy, state).filter(error => error.startsWith(`${name}:`));
 
 test('forms and CLI/API body use identical headings, not independent native fields', () => {
   for (const [name, document] of formDocuments(hierarchy)) {
@@ -108,7 +122,7 @@ test('ordered status gates require criteria from Ready and evidence from In revi
     const errors = validateIssue(hierarchy, { ...issue(description), status });
     assert.equal(errors.some(error => error.startsWith('Acceptance Criteria')), status !== 'Backlog');
     assert.equal(errors.some(error => error.startsWith('Delivery Evidence')), ['In review', 'Done'].includes(status));
-    assert.deepEqual(validateIssue(hierarchy, { ...issue(description + criteria + evidence), status }), []);
+    assert.deepEqual(validateIssue(hierarchy, { ...issue(description + criteria + evidence, 'Feature', closing), status }), []);
   }
 });
 
@@ -133,11 +147,153 @@ test('hierarchy, terminal, cycle, unknown status and unreadable values fail', ()
   assert.ok(validateIssue(hierarchy, { ...base, fieldValues: undefined }).some(error => /unreadable/.test(error)));
 });
 
+test('agent-executed stories need boundaries and restrictions from Ready; human work does not', () => {
+  const body = description + criteria;
+  for (const mode of ['Copilot attended', 'Autonomous with checkpoint']) {
+    const open = { ...issue(body, 'User Story', { 'Execution Mode': mode }), status: 'Ready' };
+    assert.equal(messages(open, 'File Boundaries').length, 1);
+    assert.equal(messages(open, 'Restrictions').length, 1);
+    assert.deepEqual(validateIssue(hierarchy, { ...open, status: 'Backlog' }), []);
+    assert.deepEqual(validateIssue(hierarchy, { ...issue(body + boundaries + restrictions, 'User Story', { 'Execution Mode': mode }), status: 'In progress' }), []);
+  }
+  assert.deepEqual(validateIssue(hierarchy, { ...issue(body, 'User Story', { 'Execution Mode': 'Human only' }), status: 'Ready' }), []);
+  assert.equal(messages({ ...issue(body, 'User Story'), status: 'Ready' }, 'Execution Mode').length, 1);
+  assert.equal(messages({ ...issue(description, 'Bug Story', { 'Execution Mode': 'Copilot attended' }), status: 'In progress' }, 'File Boundaries').length, 1);
+  const done = { ...issue(body + evidence, 'User Story', { 'Execution Mode': 'Human only', 'Cost Centre': 'CC-1', 'Time Spent': 4 }), status: 'Done' };
+  assert.equal(messages(done, 'Findings Disposition').length, 1);
+  assert.deepEqual(validateIssue(hierarchy, { ...done, issue: { ...done.issue, body: body + evidence + findings } }), []);
+});
+
+test('tasks and meetings only need category, cost centre and time when done', () => {
+  for (const type of ['Task', null]) {
+    for (const status of ['Backlog', 'Ready', 'In progress', 'In review']) {
+      assert.deepEqual(validateIssue(hierarchy, { ...issue(description, type), status }), []);
+    }
+    const missing = validateIssue(hierarchy, { ...issue(description, type), status: 'Done' });
+    assert.deepEqual(missing.map(error => error.split(':')[0]).sort(), ['Cost Centre', 'Time Spent', 'Work Category']);
+    for (const hours of [0, 1.5]) {
+      assert.deepEqual(validateIssue(hierarchy, { ...issue(description, type, { 'Work Category': 'Meeting', 'Cost Centre': 'CC-100', 'Time Spent': hours }), status: 'Done' }), []);
+    }
+  }
+});
+
+test('cost centre is inherited from any parent; unreadable parents fail', () => {
+  const done = { ...issue(description, 'Task', { 'Work Category': 'Delivery', 'Time Spent': 2 }), status: 'Done' };
+  const ancestors = [{ id: 2 }, { id: 3 }];
+  assert.equal(messages(done, 'Cost Centre').length, 1);
+  assert.deepEqual(validateIssue(hierarchy, { ...done, ancestors, ancestorFieldValues: [[], native({ 'Cost Centre': 'CC-200' })] }), []);
+  assert.match(messages({ ...done, ancestors }, 'Cost Centre')[0], /unreadable/);
+  assert.match(messages({ ...done, ancestors, ancestorFieldValues: [[], native({ 'Cost Centre': 'TBD' })] }, 'Cost Centre')[0], /every parent/);
+});
+
+test('estimates are required only for time-and-materials work without sub-issues', () => {
+  const billed = model => ({ ancestors: [{ id: 2 }], ancestorFieldValues: [native({ 'Billing Model': model, 'Cost Centre': 'CC-1' })] });
+  const task = (status, values = {}) => ({ ...issue(description, 'Task', values), status });
+  assert.deepEqual(validateIssue(hierarchy, task('In progress')), []);
+  assert.deepEqual(validateIssue(hierarchy, { ...task('In progress'), ...billed('Fixed price') }), []);
+  const hourly = billed('Time and materials');
+  assert.equal(messages({ ...task('Ready'), ...hourly }, 'Original Estimate').length, 1);
+  assert.equal(messages({ ...task('Ready'), ...hourly }, 'Remaining Work').length, 0);
+  assert.equal(messages({ ...task('In progress', { 'Original Estimate': 8 }), ...hourly }, 'Remaining Work').length, 1);
+  assert.deepEqual(validateIssue(hierarchy, { ...task('In progress', { 'Original Estimate': 8, 'Remaining Work': 3 }), ...hourly }), []);
+  const story = { ...issue(description + criteria + evidence + findings, 'User Story', { 'Execution Mode': 'Human only' }), status: 'Done', ...hourly };
+  assert.deepEqual(validateIssue(hierarchy, story).map(error => error.split(':')[0]), ['Original Estimate', 'Remaining Work', 'Time Spent']);
+  assert.deepEqual(validateIssue(hierarchy, { ...story, children: [{ id: 9, type: { name: 'Task' } }] }), []);
+});
+
+test('a feature cannot be done without the replicability answer and the asset record', () => {
+  const feature = values => ({ ...issue(description + criteria + evidence, 'Feature', values), status: 'Done' });
+  assert.deepEqual(validateIssue(hierarchy, feature()).map(error => error.split(':')[0]), ['Replicability', 'Asset Registration']);
+  assert.deepEqual(validateIssue(hierarchy, { ...feature(), status: 'In review' }), []);
+  assert.equal(messages(feature({ ...closing, 'Asset Registration': 'TBD' }), 'Asset Registration').length, 1);
+  assert.deepEqual(validateIssue(hierarchy, feature(closing)), []);
+  const initiative = { ...issue(description + criteria, 'Initiative'), status: 'Ready' };
+  assert.deepEqual(validateIssue(hierarchy, initiative).map(error => error.split(':')[0]), ['Engagement', 'Billing Model']);
+});
+
+test('negative hours, fields on the wrong type and select option objects are handled', () => {
+  assert.match(messages({ ...issue(description, 'Task', { 'Time Spent': -1 }), status: 'Backlog' }, 'Time Spent')[0], /at least 0/);
+  assert.match(messages({ ...issue(description, 'Feature', { 'Time Spent': 3 }), status: 'Backlog' }, 'Time Spent')[0], /does not apply/);
+  const mode = orgFields.find(field => field.name === 'Execution Mode');
+  const selected = { ...issue(description + criteria, 'User Story'), status: 'Ready' };
+  selected.fieldValues = [{ issue_field_id: mode.id, data_type: 'single_select', value: null, single_select_option: { id: 1, name: 'Human only', color: 'gray' } }];
+  assert.deepEqual(validateIssue(hierarchy, selected), []);
+});
+
+test('policy rejects unknown conditions, placeholder options and misplaced keys', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'bv-policy-test-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const broken = mutate => () => {
+    const config = YAML.parse(readFileSync(join('.github', 'planning', 'hierarchy.yml'), 'utf8'));
+    mutate(config);
+    writeFileSync(join(directory, 'hierarchy.yml'), YAML.stringify(config));
+    return loadConfig(join(directory, 'hierarchy.yml'));
+  };
+  assert.equal(broken(() => {})().schema_version, 2);
+  assert.throws(broken(config => { config.fields.file_boundaries.required_when.in = ['Robot']; }), /unknown option/);
+  assert.throws(broken(config => { config.fields.file_boundaries.required_when.field = 'Cost Centre'; }), /single-select/);
+  assert.throws(broken(config => { config.fields.replicability.options[1].name = 'N/A'; }), /Invalid option/);
+  assert.throws(broken(config => { config.fields.acceptance_criteria.inherit_from_ancestors = true; }), /inherited/);
+  assert.throws(broken(config => { config.fields.cost_centre.minimum = 0; }), /minimum/);
+  assert.throws(broken(config => { config.time_tracking.total_field = 'Cost Centre'; }), /time_tracking/);
+});
+
+test('snapshot reads parent field values only when a field is inherited', async () => {
+  const api = new GitHub({ dryRun: true, transport: async (path, { body } = {}) => {
+    if (path === 'graphql') return { data: { node: { id: body.variables.id, parent: body.variables.id === 'CHILD' ? { id: 'PARENT', number: 5, repository: { nameWithOwner: 'example/other' } } : null } } };
+    if (path === 'repos/example/pilot/issues/9') return { id: 9, number: 9, node_id: 'CHILD', type: { name: 'Task' }, body: description };
+    if (path === 'repos/example/other/issues/5') return { id: 5, number: 5, node_id: 'PARENT', type: { name: 'User Story' }, repository_url: 'https://api.github.com/repos/example/other' };
+    if (path.startsWith('repos/example/other/issues/5/issue-field-values')) return native({ 'Cost Centre': 'CC-9' });
+    if (path.startsWith('repos/example/pilot/issues/9/')) return [];
+    throw new Error(`Unexpected mock request ${path}`);
+  } });
+  const inherited = await snapshot(api, 'example/pilot', 9, orgFields, { inherit: true });
+  assert.deepEqual(inherited.ancestorFieldValues, [native({ 'Cost Centre': 'CC-9' })]);
+  assert.deepEqual(validateIssue(hierarchy, { ...inherited, issue: { ...inherited.issue, body: description }, status: 'Done' }).map(error => error.split(':')[0]), ['Work Category', 'Time Spent']);
+  assert.equal(Object.hasOwn(await snapshot(api, 'example/pilot', 9, orgFields), 'ancestorFieldValues'), false);
+  assert.equal(api.writes, 0);
+});
+
+const timeComments = [
+  { id: 1, user: { login: 'ana', type: 'User' }, created_at: '2026-11-20T15:00:00Z', body: 'Workshop done.\n/spent 1.5h Client workshop\n/spent 30m 2026-11-19' },
+  { id: 2, user: { login: 'ana', type: 'User' }, created_at: '2026-11-21T09:00:00Z', body: '/spent -0.5h 2026-11-20 correction' },
+  { id: 3, user: { login: 'helper[bot]', type: 'Bot' }, created_at: '2026-11-21T09:00:00Z', body: '/spent 8h' },
+  { id: 4, user: { login: 'luis', type: 'User' }, created_at: '2026-11-21T10:00:00Z', body: '/spent two hours\n/spent 1h 2026-02-30\n/spent 0h\n/spentx 3h\nI /spent 2h yesterday' },
+];
+
+test('time entries are dated, corrected by negative entries and never taken from bots', () => {
+  const { entries, invalid } = parseEntries(timeComments);
+  assert.deepEqual(entries.map(({ author, date, hours, note }) => ({ author, date, hours, note })), [
+    { author: 'ana', date: '2026-11-20', hours: 1.5, note: 'Client workshop' },
+    { author: 'ana', date: '2026-11-19', hours: 0.5, note: '' },
+    { author: 'ana', date: '2026-11-20', hours: -0.5, note: 'correction' },
+  ]);
+  assert.deepEqual(invalid.map(row => row.line), ['/spent two hours', '/spent 1h 2026-02-30', '/spent 0h']);
+});
+
+test('time log is read-only and reports a total that differs from the logged entries', async () => {
+  const transport = total => async (path, { method = 'GET' } = {}) => {
+    assert.equal(method, 'GET');
+    if (path.startsWith('orgs/RABC-SAS/issue-fields')) return orgFields;
+    if (path.includes('/issues/7/comments')) return timeComments.slice(0, 2);
+    if (path.includes('/issues/7/issue-field-values')) return total === null ? [] : native({ 'Time Spent': total });
+    throw new Error(`Unexpected mock request ${path}`);
+  };
+  const differs = await timeReport(new GitHub({ dryRun: true, transport: transport(2) }), hierarchy, { numbers: [7] });
+  assert.deepEqual(differs.totals, [{ issue: 7, logged: 1.5, total: 2, differs: true }]);
+  assert.equal(differs.entries.length, 3);
+  assert.equal(differs.writes, 0);
+  const matches = await timeReport(new GitHub({ dryRun: true, transport: transport(1.5) }), hierarchy, { numbers: [7] });
+  assert.equal(matches.differences, 0);
+  const unset = await timeReport(new GitHub({ dryRun: true, transport: transport(null) }), hierarchy, { numbers: [7] });
+  assert.deepEqual(unset.totals, [{ issue: 7, logged: 1.5, total: null, differs: true }]);
+});
+
 function fakeGitHub({ autoAdd = false, missingProject = false, missingType = false, missingField = false, denied = false } = {}) {
   const { pilot, config } = loadPilot();
   const project = { id: 'PROJECT_TARGET', number: 2, title: config.project.title, url: 'https://github.com/orgs/RABC-SAS/projects/2', closed: false, viewerCanUpdate: true };
   const types = config.issue_types.filter(name => !missingType || name !== 'Initiative').map((name, id) => ({ id, name, is_enabled: true }));
-  const fields = missingField ? [] : [{ id: 7, name: 'Cost Centre', data_type: 'text' }];
+  const fields = nativeFields(config).filter(field => !missingField || field.name !== 'Cost Centre');
   const statusField = { id: 'STATUS_TARGET', name: 'Status', dataType: 'SINGLE_SELECT', options: config.project.statuses.map((name, i) => ({ id: `OPTION_${i}`, name })) };
   const issues = [];
   const items = [];
@@ -172,7 +328,7 @@ function fakeGitHub({ autoAdd = false, missingProject = false, missingType = fal
       return types;
     }
     if (clean === `orgs/${pilot.organization}/issue-fields`) {
-      if (method === 'POST') { const row = { ...body, id: 80 }; fields.push(row); return row; }
+      if (method === 'POST') { const row = { ...body, id: 80 + fields.length }; fields.push(row); return row; }
       return fields;
     }
     if (clean.endsWith('/issues?state=all')) return issues;

@@ -5,6 +5,7 @@ import { loadConfig, formDocuments } from './policy.mjs';
 import { GitHub, Ledger, projectStatuses } from './api.mjs';
 import { reconcile } from './validation.mjs';
 import { provision } from './setup.mjs';
+import { timeReport } from './timelog.mjs';
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   'dry-run': { type: 'boolean', default: false },
@@ -64,7 +65,12 @@ try {
       manifest.data.evidence.push({ action: 'inspect', result });
       manifest.save();
     }
-  } else throw new Error('Commands: setup, inspect, generate-forms, check-forms, validate');
+  } else if (command === 'time-log') {
+    const numbers = values.numbers?.split(',').map(Number);
+    if (numbers?.some(number => !Number.isSafeInteger(number) || number <= 0)) throw new Error('Invalid issue numbers');
+    result = await timeReport(api, config, { numbers });
+    if (result.differences || result.invalid.length) process.exitCode = 1;
+  } else throw new Error('Commands: setup, inspect, generate-forms, check-forms, validate, time-log');
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {
   console.error(error.message);

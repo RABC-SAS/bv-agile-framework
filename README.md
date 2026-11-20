@@ -8,7 +8,7 @@ El simulador nunca concede autorizaciones reales ni publica releases.
 
 | Componente | Responsabilidad |
 | --- | --- |
-| [Politica de planificacion](.github/planning/hierarchy.yml) | Jerarquia, tipos, campos, estados y encabezados del cuerpo de los issues. |
+| [Politica de planificacion](.github/planning/hierarchy.yml) | Jerarquia, tipos, campos, estados, reglas por estado y encabezados del cuerpo de los issues. |
 | [Configuracion portable](.github/planning/pilot.yml) | Destino, proyecto, identidad delegada esperada, roles ficticios y controles propuestos. |
 | [Cliente y manifiesto](scripts/api.mjs) | Consultas GitHub, limites, bloqueo de escrituras en dry-run y registro externo de recursos propios. |
 | [Bootstrap y fixtures](scripts/pilot-kit.mjs) | Descubrir recursos, crear solo faltantes, conservar configuracion compartida y cerrar solo el ejemplo propio. |
@@ -16,6 +16,7 @@ El simulador nunca concede autorizaciones reales ni publica releases.
 | [Compuertas simuladas](scripts/simulation.mjs) | Recorrido positivo y 87 negativos, ligados a alcance, commit y resumen del artefacto. |
 | [Aplicacion administrativa](scripts/controls.mjs) | Crear un ruleset propio solo con plan firmado, identidad humana independiente y prerrequisitos verificados. |
 | [Planificacion existente](scripts/planning.mjs) | Generar/comprobar formularios, configurar tipos/campos y ejecutar el validador manual report_only. |
+| [Registro de tiempo](scripts/timelog.mjs) | Leer entradas `/spent` de los comentarios y compararlas con el total Time Spent, sin escribir. |
 | [Pruebas reproducibles](test/pilot.test.mjs) | Contrato de formularios, estados, jerarquia, compuertas, idempotencia, propiedad y fallos de acceso. |
 
 ```mermaid
@@ -102,8 +103,10 @@ Los eventos locales son editables y no constituyen un sistema de autorizacion co
 
 | Superficie | Validacion efectiva | Limite |
 | --- | --- | --- |
-| Formularios y cuerpo | Description obligatoria; secciones duplicadas rechazadas; contenido vacio o placeholder insuficiente cuando es obligatorio. | Los inputs terminan en un unico cuerpo Markdown; no son tres campos nativos. |
-| Estados | Acceptance Criteria desde Ready, incluido In progress; Delivery Evidence desde In review. | Reporta incumplimientos; no bloquea cambios de estado en Projects. |
+| Formularios y cuerpo | Description obligatoria; secciones duplicadas rechazadas; contenido vacio o placeholder insuficiente cuando es obligatorio. | Los inputs terminan en un unico cuerpo Markdown; no son campos nativos. |
+| Estados | Cada campo es obligatorio desde un estado y sigue obligatorio en los posteriores; la tabla de campos y reglas lista todos. | Reporta incumplimientos; no bloquea ni revierte cambios de estado en Projects. |
+| Campos nativos | Condiciones entre campos, herencia desde cualquier padre, minimo numerico y aplicabilidad por tipo. | La herencia solo lee padres de la misma organizacion; el pinning por tipo es manual. |
+| Tiempo | Entradas `/spent` con fecha, autor y horas; diferencia contra Time Spent. | Solo lectura: nadie actualiza el total automaticamente. |
 | Jerarquia | Initiative > Epic > Feature > User Story/Bug Story > Task/issue sin tipo; terminales, ciclos y aplicabilidad de campos. | La configuracion conserva las excepciones de tipos del validador existente. |
 | Simulacion | Cada gate presente, positivo, ordenado, vigente y del actor correcto; checklist completo y evidencia. | No ejecuta implementaciones, pruebas de negocio, scanners, reviews ni releases reales. |
 | Invalidacion | Rechaza alcance, commit o artefacto distintos y decisiones de otra ejecucion, repetidas o de agente. | El evaluador requiere contexto de ejecucion independiente; no autentica humanos reales. |
@@ -112,9 +115,43 @@ Los eventos locales son editables y no constituyen un sistema de autorizacion co
 | Aplicacion administrativa | Plan firmado vigente, destino/estado base exactos, revisor con acceso, CODEOWNERS y check exitoso del App y SHA esperados. | Solo crea un ruleset nuevo. Rechaza controles preexistentes y no despliega identidades, checks, scanners ni release. |
 
 Los formularios aparecen en la interfaz de creacion cuando estan publicados en la rama predeterminada.
-Al editar, GitHub muestra un cuerpo con `### Description`, `### Acceptance Criteria` y `### Delivery Evidence`.
+Al editar, GitHub muestra un cuerpo con un encabezado `###` por seccion, como `### Description` y `### Acceptance Criteria`.
 El validador usa esos mismos encabezados para formularios, agentes, interfaz de linea de comandos y API, la interfaz de programacion.
 En Backlog permite criterios/evidencia ausentes o `_No response_`; desde su estado obligatorio los rechaza.
+
+## Campos y reglas por estado
+
+La [politica](.github/planning/hierarchy.yml) define cada campo, sus tipos y el estado desde el que es obligatorio.
+Lo exigido en un estado sigue exigido en los posteriores.
+
+| Desde | Aplica a | Obligatorio |
+| --- | --- | --- |
+| Ready | Initiative | Acceptance Criteria, Engagement, Billing Model |
+| Ready | Epic, Feature | Acceptance Criteria |
+| Ready | User Story | Acceptance Criteria, Execution Mode |
+| Ready | Bug Story | Execution Mode |
+| Ready | User Story o Bug Story ejecutada con agente | File Boundaries, Restrictions |
+| Ready | Trabajo por horas sin sub-issues | Original Estimate |
+| In progress | Trabajo por horas sin sub-issues | Remaining Work |
+| In review | Initiative, Epic, Feature, User Story | Delivery Evidence |
+| Done | User Story, Bug Story | Findings Disposition |
+| Done | User Story, Bug Story, Task e issue sin tipo, sin sub-issues | Cost Centre, Time Spent |
+| Done | Task e issue sin tipo | Work Category |
+| Done | Feature | Replicability, Asset Registration |
+
+Una tarea o reunion sin padre solo necesita Work Category, Cost Centre y Time Spent al llegar a Done.
+Ejecutada con agente significa Execution Mode en `Copilot attended` o `Autonomous with checkpoint`.
+Trabajo por horas significa Billing Model en `Time and materials`, propio o heredado, sobre User Story, Bug Story, Task o issue sin tipo.
+Cost Centre, Engagement y Billing Model se heredan de cualquier padre: basta definirlos una vez arriba.
+Un issue con sub-issues no registra tiempo propio; lo registran sus hijos, y asi no se cuenta dos veces.
+Original Request es opcional y conserva el pedido tal como lo escribio la persona.
+En Findings Disposition escribe `No findings` cuando no hubo hallazgos; `None` y `N/A` cuentan como vacio.
+
+Original Estimate, Remaining Work y Time Spent se miden en horas humanas.
+Time Spent es una medida de costo, no una unidad de planificacion; cero es un valor valido.
+Un comentario `/spent 1.5h 2026-11-20 Taller con cliente` deja una entrada con fecha, autor y nota.
+Sin fecha, la entrada usa la del comentario; una entrada negativa corrige otra anterior.
+`planning time-log` lista las entradas y avisa cuando su suma difiere de Time Spent.
 
 ## Evidencia del piloto
 

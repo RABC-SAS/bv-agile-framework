@@ -12,7 +12,7 @@ export async function parentOf(api, issue) {
   return parent;
 }
 
-export async function snapshot(api, repository, number, orgFields) {
+export async function snapshot(api, repository, number, orgFields, { inherit = false } = {}) {
   const issue = await api.request(`repos/${repository}/issues/${number}`);
   if (issue.pull_request) throw new Error('Pull requests are not issues to validate');
   const parent = await parentOf(api, issue);
@@ -28,7 +28,14 @@ export async function snapshot(api, repository, number, orgFields) {
   }
   const children = await api.list(`repos/${repository}/issues/${number}/sub_issues`);
   const fieldValues = await api.list(`repos/${repository}/issues/${number}/issue-field-values`);
-  return { issue, parent, ancestors, children, fieldValues, orgFields };
+  // Parent values are read only when the policy lets a field be inherited.
+  const ancestorFieldValues = [];
+  for (const row of inherit ? ancestors : []) {
+    const base = row.repository_url?.replace('https://api.github.com/', '');
+    if (!/^repos\/[^/]+\/[^/]+$/.test(base ?? '')) throw new Error('Parent repository is unreadable');
+    ancestorFieldValues.push(await api.list(`${base}/issues/${row.number}/issue-field-values`));
+  }
+  return { issue, parent, ancestors, children, fieldValues, orgFields, ...(inherit ? { ancestorFieldValues } : {}) };
 }
 
 export async function reportResult(api, ledger, repository, number, errors, actor, marker) {
@@ -67,7 +74,7 @@ export async function reconcile(api, ledger, config, { numbers, actor } = {}) {
     let errors = [];
     let state;
     try {
-      state = await snapshot(api, repository, reference.number, orgFields);
+      state = await snapshot(api, repository, reference.number, orgFields, { inherit: Object.values(config.fields).some(field => field.inherit_from_ancestors) });
       state.status = statuses ? statuses.items.get(state.issue.node_id)?.status ?? null : undefined;
       errors = validateIssue(config, state);
     } catch (error) { errors.push(`Unable to validate: ${error.message}`); }

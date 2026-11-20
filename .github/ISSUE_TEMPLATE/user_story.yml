@@ -10,14 +10,38 @@ body:
     validations:
       required: true
   - type: textarea
+    id: original_request
+    attributes:
+      label: Original Request
+    validations:
+      required: false
+  - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria
     validations:
       required: false
   - type: textarea
+    id: file_boundaries
+    attributes:
+      label: File Boundaries
+    validations:
+      required: false
+  - type: textarea
+    id: restrictions
+    attributes:
+      label: Restrictions
+    validations:
+      required: false
+  - type: textarea
     id: delivery_evidence
     attributes:
       label: Delivery Evidence
+    validations:
+      required: false
+  - type: textarea
+    id: findings_disposition
+    attributes:
+      label: Findings Disposition
     validations:
       required: false
