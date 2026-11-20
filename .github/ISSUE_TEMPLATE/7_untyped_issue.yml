@@ -1,7 +1,8 @@
 # Generated from .github/planning/hierarchy.yml
-name: Task
-description: Create Task
-type: Task
+name: Untyped Issue
+description: Paso pequeño dentro de una historia.
+projects:
+  - RABC-SAS/2
 body:
   - type: textarea
     id: description

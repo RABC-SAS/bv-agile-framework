@@ -1,6 +1,9 @@
 # Generated from .github/planning/hierarchy.yml
-name: Untyped Issue
-description: Create Untyped Issue
+name: Task
+description: Tarea o reunión. Al terminar pide categoría, centro de costo y horas.
+type: Task
+projects:
+  - RABC-SAS/2
 body:
   - type: textarea
     id: description

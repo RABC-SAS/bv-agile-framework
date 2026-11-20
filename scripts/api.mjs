@@ -164,11 +164,11 @@ export async function projectStatuses(api, config) {
     if (!connection) throw new Error('Project items are unreadable');
     for (const item of connection.nodes) {
       if (!item?.content) throw new Error('Project item content is redacted; access failure');
-      if (item.content.__typename !== 'Issue' || item.content.repository.nameWithOwner !== `${config.organization}/${config.repository}`) continue;
+      if (item.content.__typename !== 'Issue' || !item.content.repository.nameWithOwner.startsWith(`${config.organization}/`)) continue;
       if (items.has(item.content.id)) throw new Error('Duplicate project items for the same issue');
       const value = item.fieldValueByName;
       if (value && (value.__typename !== 'ProjectV2ItemFieldSingleSelectValue' || value.field.id !== fields[0].id)) throw new Error('Project status value is unreadable or incompatible');
-      items.set(item.content.id, { id: item.id, number: item.content.number, status: value?.name ?? config.project.empty_status });
+      items.set(item.content.id, { id: item.id, number: item.content.number, repository: item.content.repository.nameWithOwner, status: value?.name ?? config.project.empty_status });
     }
     cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
     if (connection.pageInfo.hasNextPage && (!cursor || seen.has(cursor) || seen.size >= 100)) throw new Error('Project item pagination did not advance or exceeded limit');

@@ -5,13 +5,13 @@ import { loadConfig, formDocuments } from './policy.mjs';
 import { GitHub, Ledger, projectStatuses } from './api.mjs';
 import { reconcile } from './validation.mjs';
 import { provision } from './setup.mjs';
-import { timeReport } from './timelog.mjs';
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   'dry-run': { type: 'boolean', default: false },
   config: { type: 'string', default: '.github/planning/hierarchy.yml' },
   manifest: { type: 'string' },
   numbers: { type: 'string' },
+  'tolerate-violations': { type: 'boolean', default: false },
 } });
 
 try {
@@ -54,7 +54,8 @@ try {
     const actor = process.env.AGILE_REPORTER_LOGIN || (process.env.GITHUB_ACTIONS === 'true' ? 'github-actions[bot]' : (await api.request('user')).login);
     const validation = await reconcile(api, ledger(), config, { numbers, actor });
     result = { ...validation, results: validation.results.map(({ snapshot, ...row }) => ({ ...row, status: snapshot?.status })) };
-    if (validation.violations || validation.access_errors.length) process.exitCode = 1;
+    // The scheduled check fails only when it could not do its job, not when people still owe data.
+    if (validation.failures || validation.access_errors.length || (validation.violations && !values['tolerate-violations'])) process.exitCode = 1;
   } else if (command === 'inspect') {
     const project = await projectStatuses(api, config);
     const types = await api.list(`orgs/${config.organization}/issue-types`);
@@ -65,12 +66,7 @@ try {
       manifest.data.evidence.push({ action: 'inspect', result });
       manifest.save();
     }
-  } else if (command === 'time-log') {
-    const numbers = values.numbers?.split(',').map(Number);
-    if (numbers?.some(number => !Number.isSafeInteger(number) || number <= 0)) throw new Error('Invalid issue numbers');
-    result = await timeReport(api, config, { numbers });
-    if (result.differences || result.invalid.length) process.exitCode = 1;
-  } else throw new Error('Commands: setup, inspect, generate-forms, check-forms, validate, time-log');
+  } else throw new Error('Commands: setup, inspect, generate-forms, check-forms, validate');
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {
   console.error(error.message);

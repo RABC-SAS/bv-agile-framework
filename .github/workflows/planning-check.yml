@@ -1,0 +1,42 @@
+# Daily check of the shared project: leaves one plain note on each issue that is missing data.
+# It never changes a status or a field. It fails only when the check itself could not run.
+# Setup (GitHub App, variable and secret) is described in SETUP.md.
+name: Planning check
+
+on:
+  schedule:
+    - cron: '17 11 * * 1-5'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: planning-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.PLANNING_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PLANNING_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Check every issue in the project
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          AGILE_REPORTER_LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
+        run: npm run planning -- validate --tolerate-violations --manifest "$RUNNER_TEMP/planning/manifest.json"

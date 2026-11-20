@@ -1,7 +1,9 @@
 # Generated from .github/planning/hierarchy.yml
 name: User Story
-description: Create User Story
+description: Trabajo con criterios de aceptación que entrega valor a un usuario.
 type: User Story
+projects:
+  - RABC-SAS/2
 body:
   - type: textarea
     id: description
@@ -10,38 +12,24 @@ body:
     validations:
       required: true
   - type: textarea
-    id: original_request
-    attributes:
-      label: Original Request
-    validations:
-      required: false
-  - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria
+      description: Resultados que se pueden comprobar. Obligatorio desde Ready.
     validations:
       required: false
   - type: textarea
-    id: file_boundaries
+    id: boundaries
     attributes:
-      label: File Boundaries
-    validations:
-      required: false
-  - type: textarea
-    id: restrictions
-    attributes:
-      label: Restrictions
+      label: Boundaries
+      description: Solo si la ejecuta un agente. Archivos o carpetas que puede tocar y
+        lo que no debe hacer.
     validations:
       required: false
   - type: textarea
     id: delivery_evidence
     attributes:
       label: Delivery Evidence
-    validations:
-      required: false
-  - type: textarea
-    id: findings_disposition
-    attributes:
-      label: Findings Disposition
+      description: Enlaces o notas que muestran lo entregado. Obligatorio desde In review.
     validations:
       required: false

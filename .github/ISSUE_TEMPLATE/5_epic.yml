@@ -1,7 +1,9 @@
 # Generated from .github/planning/hierarchy.yml
 name: Epic
-description: Create Epic
+description: Objetivo que agrupa varias features.
 type: Epic
+projects:
+  - RABC-SAS/2
 body:
   - type: textarea
     id: description
@@ -10,20 +12,16 @@ body:
     validations:
       required: true
   - type: textarea
-    id: original_request
-    attributes:
-      label: Original Request
-    validations:
-      required: false
-  - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria
+      description: Resultados que se pueden comprobar. Obligatorio desde Ready.
     validations:
       required: false
   - type: textarea
     id: delivery_evidence
     attributes:
       label: Delivery Evidence
+      description: Enlaces o notas que muestran lo entregado. Obligatorio desde In review.
     validations:
       required: false
