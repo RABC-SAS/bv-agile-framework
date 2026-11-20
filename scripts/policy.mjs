@@ -60,7 +60,6 @@ export function loadConfig(path = '.github/planning/hierarchy.yml') {
       if (field[key] !== undefined && typeof field[key] !== 'boolean') throw new Error(`${key} must be true or false: ${field.name}`);
     }
     if (field.inherit_from_ancestors && field.storage !== 'organization_field') throw new Error(`Only organization fields can be inherited: ${field.name}`);
-    if (field.minimum !== undefined && (field.data_type !== 'number' || !Number.isFinite(field.minimum))) throw new Error(`minimum requires a number field: ${field.name}`);
   }
   for (const field of Object.values(config.fields)) {
     if (field.required_when === undefined) continue;
@@ -200,9 +199,6 @@ export function validateIssue(config, { issue, status, parent = null, children =
       } else if (required && state.effective === undefined) {
         errors.push(state.inheritedUnreadable ? `${field.name}: falta aquí y no se pudieron leer los issues padre${reason}.`
           : `${field.name}: falta. Completa el campo "${field.name}"${field.inherit_from_ancestors ? ' en este issue o en un issue padre' : ''}${reason}.`);
-      }
-      if (field.minimum !== undefined && state.values.some(candidate => typeof candidate.value === 'number' && candidate.value < field.minimum)) {
-        errors.push(`${field.name}: no puede ser menor que ${field.minimum}.`);
       }
       if (config.validation.check_field_applicability && !field.applies_to.includes(type) && state.values.some(candidate => present(candidate.value))) {
         errors.push(`${field.name}: no aplica a ${label}. Borra el valor.`);

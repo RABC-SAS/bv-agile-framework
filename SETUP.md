@@ -163,7 +163,7 @@ En la tabla del proyecto, usa `+` > `Hidden fields` > `Type`, luego configura lo
 No crees un campo custom llamado Type.
 El kit no promete habilitarlo mediante una mutacion de campo custom.
 
-La politica declara cinco campos organizacionales: Cost Centre, Work Category, Time Spent, Remaining Work y Execution Mode.
+La politica declara tres campos organizacionales: Cost Centre, Work Category y Execution Mode.
 El bootstrap crea las definiciones que falten, con sus opciones y descripcion; no modifica campos existentes ni configura su pinning.
 Una organizacion admite 25 campos y cada tipo admite 10 campos fijados; el bootstrap se detiene antes de superar el primer limite.
 En la configuracion de planificacion de la organizacion, fija en cada tipo los campos que `applies_to` le asigna.
@@ -188,10 +188,9 @@ Crea una vista por audiencia en lugar de un tablero unico.
 | Mi trabajo | `assignee:@me is:open`, tablero por Status | Cada persona |
 | Backlog | `is:open`, tabla ordenada por Priority | Todo el equipo |
 | Por repositorio | `repo:` con el repositorio, tablero por Status | Quien se enfoca en un repositorio |
-| Horas | Tabla agrupada por Cost Centre, con la suma de Time Spent | Administracion y finanzas |
+| Por centro de costo | Tabla agrupada por Cost Centre | Administracion y finanzas |
 
 Los formularios agregan el issue al proyecto solo si quien lo crea puede escribir en el proyecto.
-La suma por grupo existe para campos numericos del proyecto; no se comprobo con campos organizacionales.
 
 Para una plantilla reutilizable, marca el proyecto apropiado como template desde sus ajustes, si tu producto y permisos lo permiten.
 Comprueba esa capacidad en el destino.
@@ -281,7 +280,7 @@ El validador rechaza Description ausente, vacia, duplicada o placeholder.
 Rechaza duplicados de secciones opcionales incluso en Backlog.
 Desde Ready exige Acceptance Criteria; desde In review exige tambien Delivery Evidence.
 Esa regla aplica a Initiative, Epic, Feature y User Story.
-Bug Story, Task e issues sin tipo siguen sin criterios ni evidencia, pero al llegar a Done piden tiempo y centro de costo.
+Bug Story, Task e issues sin tipo siguen sin criterios ni evidencia, pero al llegar a Done piden centro de costo.
 La [tabla de campos y reglas](README.md#campos-y-reglas-por-estado) lista cada obligacion por estado y tipo.
 Una checklist de criterios sin marcar puede tener contenido valido; no representa aprobacion.
 Sin `--numbers`, revisa todos los issues del proyecto, de cualquier repositorio de la organizacion.
@@ -303,7 +302,7 @@ Los tipos nativos admitidos son text, number, date, single_select y multi_select
 `required_when` exige el campo solo mientras otro campo de seleccion unica tenga uno de los valores listados.
 `required_without_children` lo exige solo en issues sin sub-issues.
 `inherit_from_ancestors` acepta el valor de cualquier padre, tambien para evaluar una condicion; solo vale en campos organizacionales.
-`minimum` rechaza numeros menores; `description` se copia al crear el campo y `hint` explica una seccion en el formulario.
+`description` se copia al crear el campo y `hint` explica una seccion en el formulario.
 `forms.order` ordena los formularios y `forms.descriptions` dice para que sirve cada uno.
 Las opciones llevan solo `name`, `color` y `priority`; un nombre que sea placeholder, como `N/A`, se rechaza al cargar la politica.
 Regenera formularios y ejecuta pruebas despues de modificar la politica.

@@ -129,7 +129,7 @@ Cerrar un issue lo pasa a Done cuando el proyecto tiene activa esa automatizacio
 
 ## Campos y reglas por estado
 
-La [politica](.github/planning/hierarchy.yml) define tres secciones de texto y cinco campos.
+La [politica](.github/planning/hierarchy.yml) define tres secciones de texto y tres campos.
 Solo se agrega un campo cuando alguien lo lee en un reporte o lo necesita para hacer el trabajo.
 Lo exigido en un estado sigue exigido en los posteriores.
 
@@ -138,14 +138,14 @@ Lo exigido en un estado sigue exigido en los posteriores.
 | Ready | Initiative, Epic, Feature, User Story | Acceptance Criteria |
 | Ready | User Story o Bug Story que ejecuta un agente | Boundaries |
 | In review | Initiative, Epic, Feature, User Story | Delivery Evidence |
-| Done | User Story, Bug Story, Task e issue sin tipo, sin sub-issues | Cost Centre, Time Spent |
+| Done | User Story, Bug Story, Task e issue sin tipo, sin sub-issues | Cost Centre |
 | Done | Task e issue sin tipo | Work Category |
 
-Una tarea o reunion solo necesita Work Category, Cost Centre y Time Spent al llegar a Done.
+Una tarea o reunion solo necesita Work Category y Cost Centre al llegar a Done.
+No se registran horas.
 Cost Centre se hereda de cualquier padre: basta definirlo una vez arriba.
-Un issue con sub-issues no registra tiempo propio; lo registran sus hijos, y asi no se cuenta dos veces.
-Time Spent y Remaining Work se miden en horas humanas y se escriben en el campo; cero es un valor valido.
-Remaining Work y Execution Mode son opcionales.
+Un issue con sub-issues no necesita Cost Centre propio; lo llevan sus hijos o su padre.
+Execution Mode es opcional.
 Una historia la ejecuta un agente cuando Execution Mode esta en `Copilot attended` o `Autonomous with checkpoint`.
 Boundaries dice que archivos puede tocar el agente y que no debe hacer.
 

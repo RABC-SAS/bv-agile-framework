@@ -143,10 +143,10 @@ test('hierarchy, terminal, cycle, unknown status and unreadable values fail', ()
   assert.ok(validateIssue(hierarchy, { ...base, fieldValues: undefined }).some(error => /no se pudieron leer/.test(error)));
 });
 
-test('the policy stays small: three body sections and five organization fields', () => {
+test('the policy stays small: three body sections and three organization fields', () => {
   const fields = Object.values(hierarchy.fields);
   assert.deepEqual(fields.filter(field => field.storage === 'issue_body').map(field => field.name), ['Acceptance Criteria', 'Boundaries', 'Delivery Evidence']);
-  assert.deepEqual(orgFields.map(field => field.name), ['Cost Centre', 'Work Category', 'Time Spent', 'Remaining Work', 'Execution Mode']);
+  assert.deepEqual(orgFields.map(field => field.name), ['Cost Centre', 'Work Category', 'Execution Mode']);
 });
 
 test('a story executed by an agent needs boundaries from Ready; other work never does', () => {
@@ -163,30 +163,28 @@ test('a story executed by an agent needs boundaries from Ready; other work never
   assert.deepEqual(validateIssue(hierarchy, { ...issue(description, 'Task', { 'Execution Mode': 'Copilot attended' }), status: 'In progress' }), []);
 });
 
-test('tasks and meetings only need category, cost centre and time when done', () => {
+test('tasks and meetings only need category and cost centre when done', () => {
   for (const type of ['Task', null]) {
     for (const status of ['Backlog', 'Ready', 'In progress', 'In review']) {
       assert.deepEqual(validateIssue(hierarchy, { ...issue(description, type), status }), []);
     }
     const missing = validateIssue(hierarchy, { ...issue(description, type), status: 'Done' });
-    assert.deepEqual(missing.map(error => error.split(':')[0]), ['Cost Centre', 'Work Category', 'Time Spent']);
+    assert.deepEqual(missing.map(error => error.split(':')[0]), ['Cost Centre', 'Work Category']);
     assert.ok(missing.every(error => /falta\. Completa el campo/.test(error)));
-    for (const hours of [0, 1.5]) {
-      assert.deepEqual(validateIssue(hierarchy, { ...issue(description, type, { 'Work Category': 'Meeting', 'Cost Centre': 'CC-100', 'Time Spent': hours }), status: 'Done' }), []);
-    }
+    assert.deepEqual(validateIssue(hierarchy, { ...issue(description, type, { 'Work Category': 'Meeting', 'Cost Centre': 'CC-100' }), status: 'Done' }), []);
   }
 });
 
-test('a story is done with cost centre and time, unless its sub-issues carry them', () => {
+test('a story is done with a cost centre, unless its sub-issues carry it', () => {
   const story = { ...issue(description + criteria + evidence, 'User Story'), status: 'Done' };
-  assert.deepEqual(validateIssue(hierarchy, story).map(error => error.split(':')[0]), ['Cost Centre', 'Time Spent']);
+  assert.deepEqual(validateIssue(hierarchy, story).map(error => error.split(':')[0]), ['Cost Centre']);
   assert.deepEqual(validateIssue(hierarchy, { ...story, children: [{ id: 9, type: { name: 'Task' } }] }), []);
-  assert.deepEqual(validateIssue(hierarchy, { ...story, fieldValues: native({ 'Cost Centre': 'CC-1', 'Time Spent': 6, 'Remaining Work': 0 }) }), []);
+  assert.deepEqual(validateIssue(hierarchy, { ...story, fieldValues: native({ 'Cost Centre': 'CC-1' }) }), []);
   assert.deepEqual(validateIssue(hierarchy, { ...issue(description + criteria + evidence), status: 'Done' }), []);
 });
 
 test('cost centre is inherited from any parent; unreadable parents fail', () => {
-  const done = { ...issue(description, 'Task', { 'Work Category': 'Delivery', 'Time Spent': 2 }), status: 'Done' };
+  const done = { ...issue(description, 'Task', { 'Work Category': 'Delivery' }), status: 'Done' };
   const ancestors = [{ id: 2 }, { id: 3 }];
   assert.match(messages(done, 'Cost Centre')[0], /en este issue o en un issue padre/);
   assert.deepEqual(validateIssue(hierarchy, { ...done, ancestors, ancestorFieldValues: [[], native({ 'Cost Centre': 'CC-200' })] }), []);
@@ -194,10 +192,9 @@ test('cost centre is inherited from any parent; unreadable parents fail', () => 
   assert.equal(messages({ ...done, ancestors, ancestorFieldValues: [[], native({ 'Cost Centre': 'TBD' })] }, 'Cost Centre').length, 1);
 });
 
-test('negative hours, fields on the wrong type and select option objects are handled', () => {
-  for (const name of ['Time Spent', 'Remaining Work']) {
-    assert.match(messages({ ...issue(description, 'Task', { [name]: -1 }), status: 'Backlog' }, name)[0], /menor que 0/);
-    assert.match(messages({ ...issue(description, 'Feature', { [name]: 3 }), status: 'Backlog' }, name)[0], /no aplica a Feature/);
+test('fields on the wrong type and select option objects are handled', () => {
+  for (const name of ['Work Category', 'Execution Mode']) {
+    assert.match(messages({ ...issue(description, 'Feature', { [name]: 'Meeting' }), status: 'Backlog' }, name)[0], /no aplica a Feature/);
   }
   const mode = orgFields.find(field => field.name === 'Execution Mode');
   const selected = { ...issue(description + criteria, 'User Story'), status: 'Ready' };
@@ -219,7 +216,6 @@ test('policy rejects unknown conditions, placeholder options and misplaced keys'
   assert.throws(broken(config => { config.fields.boundaries.required_when.field = 'Cost Centre'; }), /single-select/);
   assert.throws(broken(config => { config.fields.work_category.options[1].name = 'N/A'; }), /Invalid option/);
   assert.throws(broken(config => { config.fields.acceptance_criteria.inherit_from_ancestors = true; }), /inherited/);
-  assert.throws(broken(config => { config.fields.cost_centre.minimum = 0; }), /minimum/);
   assert.throws(broken(config => { config.fields.cost_centre.hint = 'Only for body sections'; }), /hint/);
   assert.throws(broken(config => { config.forms.order.pop(); }), /forms\.order/);
   assert.throws(broken(config => { config.forms.descriptions.Meeting = 'Not a type'; }), /form description/);
@@ -250,7 +246,7 @@ test('snapshot reads parent field values only when a field is inherited', async 
   } });
   const inherited = await snapshot(api, 'example/pilot', 9, orgFields, { inherit: true });
   assert.deepEqual(inherited.ancestorFieldValues, [native({ 'Cost Centre': 'CC-9' })]);
-  assert.deepEqual(validateIssue(hierarchy, { ...inherited, status: 'Done' }).map(error => error.split(':')[0]), ['Work Category', 'Time Spent']);
+  assert.deepEqual(validateIssue(hierarchy, { ...inherited, status: 'Done' }).map(error => error.split(':')[0]), ['Work Category']);
   assert.equal(Object.hasOwn(await snapshot(api, 'example/pilot', 9, orgFields), 'ancestorFieldValues'), false);
   assert.equal(api.writes, 0);
 });
@@ -260,8 +256,8 @@ function fakeProject({ denyFields = false } = {}) {
   const marker = hierarchy.validation.marker;
   const issues = {
     'RABC-SAS/bv-agile-framework#1': { type: 'Task', status: 'Done', values: {}, comments: [] },
-    'RABC-SAS/operations#4': { type: 'Task', status: 'Done', values: { 'Work Category': 'Meeting', 'Cost Centre': 'CC-1', 'Time Spent': 1 }, comments: [] },
-    'RABC-SAS/operations#5': { type: 'Task', status: 'Done', values: { 'Work Category': 'Support', 'Cost Centre': 'CC-1', 'Time Spent': 2 }, comments: [{ id: 50, user: { login: 'planning[bot]' }, body: `${marker}\n## Faltan datos en este issue\n\n- Time Spent: falta.` }] },
+    'RABC-SAS/operations#4': { type: 'Task', status: 'Done', values: { 'Work Category': 'Meeting', 'Cost Centre': 'CC-1' }, comments: [] },
+    'RABC-SAS/operations#5': { type: 'Task', status: 'Done', values: { 'Work Category': 'Support', 'Cost Centre': 'CC-1' }, comments: [{ id: 50, user: { login: 'planning[bot]' }, body: `${marker}\n## Faltan datos en este issue\n\n- Work Category: falta.` }] },
   };
   const key = path => path.match(/^repos\/([^/]+\/[^/]+)\/issues\/(\d+)/)?.slice(1).join('#');
   const statusField = { id: 'STATUS', name: 'Status', dataType: 'SINGLE_SELECT', options: hierarchy.project.statuses.map((name, index) => ({ id: `O${index}`, name })) };
@@ -322,7 +318,7 @@ test('the check covers every repository in the project and leaves a note only wh
   const missing = issues['RABC-SAS/bv-agile-framework#1'].comments;
   assert.equal(missing.length, 1);
   assert.ok(missing[0].body.startsWith(`${marker}\n## Faltan datos en este issue`));
-  assert.match(missing[0].body, /- Time Spent: falta\. Completa el campo "Time Spent" \(obligatorio para Task desde Done\)\./);
+  assert.match(missing[0].body, /- Work Category: falta\. Completa el campo "Work Category" \(obligatorio para Task desde Done\)\./);
   assert.deepEqual(issues['RABC-SAS/operations#4'].comments, []);
   assert.match(issues['RABC-SAS/operations#5'].comments[0].body, /## Datos completos/);
   assert.deepEqual(writes.map(write => write.method), ['POST', 'PATCH']);

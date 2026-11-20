@@ -37,9 +37,8 @@ hierarchy:
 #   applies_to / required_on: issue types; null is the untyped issue.
 #   required_from_status: first project status where the field is required; cumulative.
 #   required_when: required only while another single-select field has one of the listed values.
-#   required_without_children: required only on issues with no sub-issues, so time is not counted twice.
+#   required_without_children: required only on issues with no sub-issues; their children carry the value.
 #   inherit_from_ancestors: a value on any parent satisfies the requirement.
-#   minimum: lowest accepted number.
 #   hint / description: help text shown in the form or on the field.
 # Add a field only when someone reads it in a report or needs it to do the work.
 fields:
@@ -85,7 +84,7 @@ fields:
     inherit_from_ancestors: true
   work_category:
     name: Work Category
-    description: Clase de trabajo, para los reportes de tiempo y costo
+    description: Clase de trabajo, para los reportes por centro de costo
     storage: organization_field
     data_type: single_select
     options:
@@ -98,24 +97,6 @@ fields:
     applies_to: [User Story, Bug Story, Task, null]
     required_on: [Task, null]
     required_from_status: Done
-  time_spent:
-    name: Time Spent
-    description: Horas humanas dedicadas en total
-    storage: organization_field
-    data_type: number
-    minimum: 0
-    applies_to: [User Story, Bug Story, Task, null]
-    required_on: [User Story, Bug Story, Task, null]
-    required_from_status: Done
-    required_without_children: true
-  remaining_work:
-    name: Remaining Work
-    description: Horas humanas que faltan, estimadas; opcional
-    storage: organization_field
-    data_type: number
-    minimum: 0
-    applies_to: [User Story, Bug Story, Task, null]
-    required_on: []
   execution_mode:
     name: Execution Mode
     description: Quién ejecuta el trabajo; opcional. Con un agente, la historia necesita Boundaries
@@ -135,7 +116,7 @@ forms:
   # Order in the "New issue" chooser: simple work first.
   order: [Task, User Story, Bug Story, Feature, Epic, Initiative, null]
   descriptions:
-    Task: Tarea o reunión. Al terminar pide categoría, centro de costo y horas.
+    Task: Tarea o reunión. Al terminar pide categoría y centro de costo.
     User Story: Trabajo con criterios de aceptación que entrega valor a un usuario.
     Bug Story: Algo que no funciona como debería.
     Feature: Capacidad que agrupa varias historias.

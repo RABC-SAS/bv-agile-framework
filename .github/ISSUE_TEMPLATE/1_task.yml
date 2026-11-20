@@ -1,6 +1,6 @@
 # Generated from .github/planning/hierarchy.yml
 name: Task
-description: Tarea o reunión. Al terminar pide categoría, centro de costo y horas.
+description: Tarea o reunión. Al terminar pide categoría y centro de costo.
 type: Task
 projects:
   - RABC-SAS/2
